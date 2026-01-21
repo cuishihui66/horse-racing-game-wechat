@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>赛马摇一摇 - 主持人控制台</title>
+    <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="host-container">
+        <header class="main-header">
+            <h1 class="header-title">赛马摇一摇 主持人控制台</h1>
+            <div class="host-account">
+                <span>主持人: Admin</span>
+                <button class="btn btn-secondary">登出</button>
+            </div>
+        </header>
+
+        <div id="login-view" class="login-view active">
+            <div class="login-card">
+                <h2>主持人登录</h2>
+                <input type="text" id="username-input" placeholder="用户名" value="admin">
+                <input type="password" id="password-input" placeholder="密码" value="password">
+                <button id="login-btn" class="btn btn-primary large-btn">登录</button>
+                <p class="login-status" id="login-status"></p>
+            </div>
+        </div>
+
+        <main class="main-content hidden">
+            <aside class="sidebar">
+                <nav>
+                    <ul>
+                        <li class="nav-item active" data-view="dashboard">仪表盘</li>
+                        <li class="nav-item" data-view="game-control">游戏控制</li>
+                        <li class="nav-item" data-view="wall-messages">留言墙管理</li>
+                    </ul>
+                </nav>
+            </aside>
+
+            <section class="content-area">
+                <!-- Dashboard View -->
+                <div id="dashboard-view" class="view active">
+                    <h2 class="section-title">会话概览</h2>
+                    <button id="create-session-btn" class="btn btn-primary large-btn">创建新游戏会话</button>
+
+                    <div class="card-list">
+                        <h3>现有会话</h3>
+                        <div class="session-card">
+                            <div class="session-info">
+                                <span class="session-id">ID: #SESSION-XYZ123</span>
+                                <span class="session-status status-completed">状态: 已完成</span>
+                                <span class="session-date">创建日期: 2024-01-20</span>
+                            </div>
+                            <button class="btn btn-secondary manage-btn" data-session-id="SESSION-XYZ123">管理</button>
+                        </div>
+                        <div class="session-card">
+                            <div class="session-info">
+                                <span class="session-id">ID: #SESSION-ABC456</span>
+                                <span class="session-status status-active">状态: 进行中</span>
+                                <span class="session-date">创建日期: 2024-01-21</span>
+                            </div>
+                            <button class="btn btn-primary manage-btn" data-session-id="SESSION-ABC456">管理</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Game Control View -->
+                <div id="game-control-view" class="view">
+                    <h2 class="section-title">游戏控制: <span id="current-session-id">#SESSION-ABC456</span></h2>
+                    <div class="game-status-bar">
+                        <span id="game-current-status" class="status-indicator status-active">当前状态: 准备就绪</span>
+                        <span id="game-participant-count">参与人数: 0</span>
+                    </div>
+
+                    <div class="control-grid">
+                        <!-- QR Code Management Card -->
+                        <div class="card qr-card">
+                            <h3 class="card-title">游戏会话二维码</h3>
+                            <div class="qr-code-display">
+                                <img id="qr-code-img" src="https://via.placeholder.com/200?text=QR+Code+Placeholder" alt="Game Session QR Code">
+                                <div id="qr-overlay" class="qr-overlay">扫码未激活</div>
+                            </div>
+                            <button id="toggle-qr-scan-btn" class="btn btn-primary">启动扫码</button>
+                            <button id="view-participants-btn" class="btn btn-secondary">查看参与者 (0)</button>
+                        </div>
+
+                        <!-- Game Actions Card -->
+                        <div class="card actions-card">
+                            <h3 class="card-title">游戏操作</h3>
+                            <button id="start-race-btn" class="btn btn-primary" disabled>开始比赛</button>
+                            <button id="reset-game-btn" class="btn btn-warning" disabled>重置游戏</button>
+                            <button id="end-session-btn" class="btn btn-danger">结束会话</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Wall Messages View -->
+                <div id="wall-messages-view" class="view">
+                    <h2 class="section-title">留言墙管理: <span id="wall-current-session-id"></span></h2>
+                    <div class="game-status-bar wall-status-bar">
+                        <span id="wall-status" class="status-indicator status-active">留言墙状态: 开启</span>
+                        <span id="wall-pending-count">待审核: 0</span>
+                        <button id="wall-toggle-active-btn" class="btn btn-primary">关闭留言墙</button>
+                    </div>
+
+                    <div class="wall-grid">
+                        <div class="card pending-messages-card">
+                            <h3 class="card-title">待审核消息 (<span id="pending-messages-count">0</span>)</h3>
+                            <div id="pending-messages-list" class="message-list">
+                                <!-- Pending messages will be loaded here -->
+                                <p class="no-messages">暂无待审核消息</p>
+                            </div>
+                        </div>
+                        <div class="card approved-messages-card">
+                            <h3 class="card-title">已通过消息 (<span id="approved-messages-count">0</span>)</h3>
+                            <div id="approved-messages-list" class="message-list">
+                                <!-- Approved messages will be loaded here -->
+                                <p class="no-messages">暂无已通过消息</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

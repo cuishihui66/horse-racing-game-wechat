@@ -5,9 +5,220 @@
     --secondary-bg: #283593; /* Medium Blue */
     --accent-color-1: #ffeb3b; /* Yellow */
     --accent-color-2: #ff4081; /* Pink */
+    --accent-color-1-rgb: 255, 235, 59; /* RGB for --accent-color-1 */
+    --secondary-bg-rgb: 40, 53, 147; /* RGB for --secondary-bg */
+    --text-color-rgb: 224, 224, 224; /* RGB for --text-color */
     --text-color: #e0e0e0; /* Light Gray */
     --track-color: #424242; /* Dark Gray for track */
     --line-color: #bdbdbd; /* Light Gray for lines */
+}
+
+/* Wall Message Container */
+.wall-message-container {
+    position: absolute; /* Position over existing layout or beside */
+    top: 50%; /* Adjust as needed */
+    right: 2vw; /* Adjust position */
+    transform: translateY(-50%);
+    width: 25vw; /* Width for the message wall */
+    height: 70vh; /* Height for the message wall */
+    background-color: rgba(0, 0, 0, 0.4); /* Semi-transparent dark background */
+    border-radius: 15px;
+    padding: 15px;
+    box-shadow: 0 0 20px rgba(var(--accent-color-1-rgb), 0.5); /* Neon glow */
+    display: flex;
+    flex-direction: column-reverse; /* New messages appear at bottom, push up */
+    overflow: hidden; /* Hide messages outside the container */
+    gap: 10px; /* Space between messages */
+    z-index: 20; /* Ensure it's above race track */
+    border: 2px solid rgba(var(--accent-color-1-rgb), 0.7);
+}
+
+.wall-message-card {
+    background-color: rgba(var(--secondary-bg-rgb), 0.8);
+    border-radius: 10px;
+    padding: 10px 15px;
+    color: var(--text-color);
+    font-size: 1.1vw;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+    opacity: 0; /* Hidden by default, animated in */
+    transform: translateY(20px);
+    animation: fadeInSlideUp 0.5s ease-out forwards;
+    position: relative; /* For image positioning */
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.wall-message-card.removing {
+    animation: fadeOutSlideDown 0.5s ease-in forwards;
+}
+
+.message-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 5px;
+    border-bottom: 1px dashed rgba(var(--text-color-rgb), 0.2);
+    padding-bottom: 5px;
+}
+
+.message-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 1px solid var(--accent-color-2);
+}
+
+.message-nickname {
+    font-weight: bold;
+    color: var(--accent-color-2); /* Pink accent for nicknames */
+    font-size: 1.2vw;
+}
+
+.message-content {
+    word-wrap: break-word;
+    font-size: 1vw;
+    line-height: 1.4;
+    max-height: 8em; /* Limit height for long messages */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-color);
+}
+
+.message-image {
+    max-width: 100%;
+    max-height: 150px; /* Limit image height */
+    border-radius: 8px;
+    margin-top: 5px;
+    object-fit: contain;
+    background-color: rgba(0, 0, 0, 0.2);
+}
+
+/* Keyframes for animations */
+@keyframes fadeInSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeOutSlideDown {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+}
+
+/* Wall Message Container */
+.wall-message-container {
+    position: absolute; /* Position over existing layout or beside */
+    top: 50%; /* Adjust as needed */
+    right: 2vw; /* Adjust position */
+    transform: translateY(-50%);
+    width: 25vw; /* Width for the message wall */
+    height: 70vh; /* Height for the message wall */
+    background-color: rgba(0, 0, 0, 0.4); /* Semi-transparent dark background */
+    border-radius: 15px;
+    padding: 15px;
+    box-shadow: 0 0 20px rgba(var(--accent-color-1-rgb), 0.5); /* Neon glow */
+    display: flex;
+    flex-direction: column-reverse; /* New messages appear at bottom, push up */
+    overflow: hidden; /* Hide messages outside the container */
+    gap: 10px; /* Space between messages */
+    z-index: 20; /* Ensure it's above race track */
+    border: 2px solid rgba(var(--accent-color-1-rgb), 0.7);
+}
+
+.wall-message-card {
+    background-color: rgba(var(--secondary-bg-rgb), 0.8);
+    border-radius: 10px;
+    padding: 10px 15px;
+    color: var(--text-color);
+    font-size: 1.1vw;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+    opacity: 0; /* Hidden by default, animated in */
+    transform: translateY(20px);
+    animation: fadeInSlideUp 0.5s ease-out forwards;
+    position: relative; /* For image positioning */
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.wall-message-card.removing {
+    animation: fadeOutSlideDown 0.5s ease-in forwards;
+}
+
+.message-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 5px;
+    border-bottom: 1px dashed rgba(var(--text-color-rgb), 0.2);
+    padding-bottom: 5px;
+}
+
+.message-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 1px solid var(--accent-color-2);
+}
+
+.message-nickname {
+    font-weight: bold;
+    color: var(--accent-color-2); /* Pink accent for nicknames */
+    font-size: 1.2vw;
+}
+
+.message-content {
+    word-wrap: break-word;
+    font-size: 1vw;
+    line-height: 1.4;
+    max-height: 8em; /* Limit height for long messages */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-color);
+}
+
+.message-image {
+    max-width: 100%;
+    max-height: 150px; /* Limit image height */
+    border-radius: 8px;
+    margin-top: 5px;
+    object-fit: contain;
+    background-color: rgba(0, 0, 0, 0.2);
+}
+
+/* Keyframes for animations */
+@keyframes fadeInSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeOutSlideDown {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(20px);
+    }
 }
 
 body {

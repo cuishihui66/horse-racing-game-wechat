@@ -2,7 +2,8 @@
   "pages": [
     "pages/scan/scan",
     "pages/success/success",
-    "pages/accelerate/accelerate"
+    "pages/accelerate/accelerate",
+    "pages/wall/wall"
   ],
   "window": {
     "backgroundTextStyle": "light",

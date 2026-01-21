@@ -1,0 +1,559 @@
+/* host-panel/style.css */
+
+/* --- General Styling & Variables --- */
+:root {
+    --color-background-dark: #1A1B26; /* Deep Indigo */
+    --color-background-light: #2E2F38; /* Dark Slate - Card backgrounds */
+    --color-text-primary: #EAECEF; /* Off-White */
+    --color-text-secondary: #A0A1AC; /* Light Gray-Blue */
+    --color-accent-primary: #00E676; /* Vibrant Green - Success, Primary actions */
+    --color-accent-primary-rgb: 0, 230, 118; /* RGB for glowing effects */
+    --color-accent-secondary: #FFD700; /* Gold - Warnings, active toggles */
+    --color-danger: #FF3B30; /* Red - Critical actions */
+    --color-warning: #FFA500; /* Orange - Reset/Warning */
+    --color-info: #00BFFF; /* Deep Sky Blue - Info */
+
+    --font-display: 'Exo 2', sans-serif;
+    --font-body: 'Open Sans', sans-serif;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    font-family: var(--font-body);
+    background-color: var(--color-background-dark);
+    color: var(--color-text-primary);
+    line-height: 1.6;
+    height: 100%;
+    overflow: hidden; /* Prevent scrollbars */
+}
+
+.host-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+/* --- Login View --- */
+.login-view {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: calc(100vh - 70px); /* Adjust based on header height */
+    background: linear-gradient(135deg, var(--color-background-dark) 0%, #3a4b67 100%);
+    position: absolute;
+    top: 70px; /* Below header */
+    left: 0;
+    width: 100%;
+    z-index: 1000; /* Ensure it's on top */
+}
+
+.login-view.hidden {
+    display: none;
+}
+
+.login-card {
+    background-color: var(--color-background-light);
+    padding: 40px;
+    border-radius: 12px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
+    text-align: center;
+    width: 350px;
+}
+
+.login-card h2 {
+    font-family: var(--font-display);
+    font-size: 28px;
+    color: var(--color-accent-secondary);
+    margin-bottom: 30px;
+}
+
+.login-card input[type="text"],
+.login-card input[type="password"] {
+    width: calc(100% - 20px);
+    padding: 12px 10px;
+    margin-bottom: 20px;
+    border: 1px solid var(--color-text-secondary);
+    border-radius: 6px;
+    background-color: var(--color-background-dark);
+    color: var(--color-text-primary);
+    font-size: 16px;
+    outline: none;
+    transition: border-color 0.2s ease;
+}
+
+.login-card input[type="text"]:focus,
+.login-card input[type="password"]:focus {
+    border-color: var(--color-accent-primary);
+}
+
+.login-card .large-btn {
+    width: 100%;
+    margin-top: 10px;
+}
+
+.login-status {
+    color: var(--color-danger);
+    margin-top: 15px;
+    font-size: 14px;
+    min-height: 20px; /* Reserve space for message */
+}
+
+.main-content.hidden {
+    display: none;
+}
+
+
+.header-title {
+    font-family: var(--font-display);
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--color-accent-primary);
+    margin: 0;
+}
+
+.host-account {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    font-size: 14px;
+}
+
+/* --- Main Content Area --- */
+.main-content {
+    display: flex;
+    flex-grow: 1;
+    overflow: hidden; /* Important for child scrollbars */
+}
+
+/* --- Sidebar Navigation --- */
+.sidebar {
+    width: 200px;
+    background-color: var(--color-background-light);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 20px 0;
+    flex-shrink: 0;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+}
+
+.sidebar nav ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.nav-item {
+    padding: 15px 20px;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+}
+
+.nav-item:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: var(--color-text-primary);
+}
+
+.nav-item.active {
+    background-color: var(--color-background-dark);
+    color: var(--color-accent-primary);
+    border-left: 4px solid var(--color-accent-primary);
+    padding-left: 16px;
+}
+
+/* --- Content Area --- */
+.content-area {
+    flex-grow: 1;
+    padding: 30px;
+    overflow-y: auto; /* Allow scrolling for content */
+}
+
+.view {
+    display: none;
+}
+
+.view.active {
+    display: block;
+}
+
+.section-title {
+    font-family: var(--font-display);
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--color-accent-secondary);
+    margin-bottom: 25px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 10px;
+}
+
+/* --- Buttons --- */
+.btn {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-family: var(--font-body);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.btn:hover {
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+.btn:active {
+    transform: translateY(1px);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.btn-primary {
+    background-color: var(--color-accent-primary);
+    color: var(--color-background-dark);
+}
+
+.btn-primary:hover {
+    background-color: #00C853; /* Slightly darker green */
+}
+
+.btn-secondary {
+    background-color: var(--color-background-light);
+    color: var(--color-text-primary);
+    border: 1px solid var(--color-text-secondary);
+}
+
+.btn-secondary:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.btn-warning {
+    background-color: var(--color-warning);
+    color: var(--color-background-dark);
+}
+
+.btn-warning:hover {
+    background-color: #E69500;
+}
+
+.btn-danger {
+    background-color: var(--color-danger);
+    color: var(--color-text-primary);
+}
+
+.btn-danger:hover {
+    background-color: #C62828;
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
+.large-btn {
+    padding: 15px 30px;
+    font-size: 18px;
+    margin-bottom: 30px;
+}
+
+/* --- Cards --- */
+.card-list {
+    margin-top: 30px;
+}
+
+.card-list h3 {
+    font-family: var(--font-display);
+    font-size: 20px;
+    color: var(--color-text-primary);
+    margin-bottom: 15px;
+}
+
+.session-card {
+    background-color: var(--color-background-light);
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.session-info {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.session-id {
+    font-weight: 700;
+    color: var(--color-text-primary);
+}
+
+.session-status {
+    font-size: 13px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.status-active {
+    background-color: var(--color-accent-primary);
+    color: var(--color-background-dark);
+}
+.status-completed {
+    background-color: var(--color-text-secondary);
+    color: var(--color-background-dark);
+}
+.status-pending {
+    background-color: var(--color-accent-secondary);
+    color: var(--color-background-dark);
+}
+.status-error {
+    background-color: var(--color-danger);
+    color: var(--color-text-primary);
+}
+
+.manage-btn {
+    padding: 8px 15px;
+    font-size: 14px;
+}
+
+/* --- Game Control View Specifics --- */
+.game-status-bar {
+    background-color: var(--color-background-light);
+    padding: 15px 20px;
+    border-radius: 8px;
+    margin-bottom: 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.status-indicator {
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.status-indicator::before {
+    content: '';
+    display: block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: var(--color-text-secondary);
+}
+.status-indicator.status-active::before { background-color: var(--color-accent-primary); }
+.status-indicator.status-pending::before { background-color: var(--color-accent-secondary); }
+.status-indicator.status-error::before { background-color: var(--color-danger); }
+
+
+.control-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+}
+
+.card {
+    background-color: var(--color-background-light);
+    padding: 25px;
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.card-title {
+    font-family: var(--font-display);
+    font-size: 20px;
+    color: var(--color-accent-secondary);
+    margin-top: 0;
+    margin-bottom: 20px;
+}
+
+.qr-code-display {
+    background-color: #fff;
+    padding: 10px;
+    border-radius: 5px;
+    display: inline-block; /* To contain the image */
+    margin-bottom: 20px;
+    position: relative;
+}
+
+.qr-code-display img {
+    display: block;
+    width: 200px;
+    height: 200px;
+}
+
+.qr-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 18px;
+    font-weight: bold;
+    text-align: center;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+}
+
+.qr-overlay.hidden {
+    opacity: 0;
+    pointer-events: none; /* Allow interaction with QR code below */
+}
+
+.qr-card .btn {
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+.actions-card .btn {
+    width: 100%;
+    margin-bottom: 15px;
+}
+
+.actions-card .btn:last-child {
+    margin-bottom: 0;
+}
+
+/* Wall Messages View */
+.wall-messages-view .section-title {
+    margin-bottom: 20px;
+}
+
+.wall-status-bar {
+    margin-bottom: 30px;
+    background-color: var(--color-background-light);
+    padding: 15px 20px;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.wall-status-bar .status-indicator {
+    padding-right: 15px;
+}
+
+.wall-status-bar #wall-pending-count {
+    color: var(--color-accent-secondary);
+    font-weight: bold;
+}
+
+.wall-toggle-active-btn {
+    padding: 8px 15px;
+    font-size: 14px;
+}
+
+.wall-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    min-height: 600px; /* Ensure cards have some height */
+}
+
+.message-list {
+    background-color: var(--color-background-dark);
+    border-radius: 8px;
+    padding: 15px;
+    max-height: 500px; /* Fixed height for scrolling */
+    overflow-y: auto;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.message-card {
+    background-color: var(--color-background-light);
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    position: relative;
+}
+
+.message-card.top-message {
+    border: 2px solid var(--color-accent-primary);
+    box-shadow: 0 0 10px rgba(var(--color-accent-primary-rgb), 0.5); /* Glowing effect */
+}
+
+.message-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+}
+
+.message-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background-color: var(--color-text-secondary); /* Placeholder background */
+    flex-shrink: 0;
+}
+
+.message-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.message-nickname {
+    font-weight: 600;
+    color: var(--color-accent-secondary);
+    font-size: 14px;
+}
+
+.message-time {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+}
+
+.message-content {
+    font-size: 14px;
+    color: var(--color-text-primary);
+    word-break: break-word;
+    white-space: pre-wrap; /* Preserve whitespace and line breaks */
+}
+
+.message-image-preview {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    margin-top: 5px;
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+.message-actions {
+    display: flex;
+    gap: 5px;
+    margin-top: 10px;
+    justify-content: flex-end;
+}
+
+.message-actions .btn {
+    padding: 5px 10px;
+    font-size: 12px;
+    border-radius: 5px;
+}
+
+.message-list .no-messages {
+    text-align: center;
+    color: var(--color-text-secondary);
+    font-size: 14px;
+    margin-top: 20px;
+}

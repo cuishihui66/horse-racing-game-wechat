@@ -1,0 +1,41 @@
+<!--miniprogram/pages/wall/wall.wxml-->
+<view class="container">
+  <text class="page-title">大屏幕留言墙</text>
+
+  <!-- Scan QR Code to Join Wall -->
+  <view wx:if="{{!wallSessionId}}" class="scan-section">
+    <button class="button-primary" bindtap="scanWallCode">扫码加入留言</button>
+    <text class="scan-tip">请扫描大屏幕上的留言墙二维码</text>
+  </view>
+
+  <!-- Message Composition Area -->
+  <view wx:if="{{wallSessionId}}" class="message-section">
+    <text class="session-info">会话ID: {{wallSessionId}}</text>
+    <textarea
+      class="message-input"
+      placeholder="输入你想说的话..."
+      maxlength="200"
+      value="{{messageContent}}"
+      bindinput="bindInput"
+    ></textarea>
+    <view class="input-actions">
+      <view class="image-upload-area">
+        <block wx:if="{{!selectedImage}}">
+          <button class="image-btn" bindtap="chooseImage">
+            <image src="/images/add_image.png" class="add-image-icon"></image>
+            <text>添加图片</text>
+          </button>
+        </block>
+        <block wx:else>
+          <view class="image-preview-wrapper">
+            <image src="{{selectedImage}}" mode="aspectFill" class="image-preview"></image>
+            <view class="remove-image" bindtap="removeImage">x</view>
+          </view>
+        </block>
+      </view>
+      <button class="button-send" bindtap="sendMessage" disabled="{{isSending || (!messageContent && !selectedImage)}}">
+        发送
+      </button>
+    </view>
+  </view>
+</view>

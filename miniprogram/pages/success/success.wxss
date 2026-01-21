@@ -1,0 +1,61 @@
+/* miniprogram/pages/success/success.wxss */
+page {
+  background: linear-gradient(135deg, #1A2980, #26D0CE); /* Fresh gradient background */
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 80rpx 40rpx;
+  background-color: rgba(255, 255, 255, 0.15);
+  border-radius: 30rpx;
+  box-shadow: 0 10rpx 30rpx rgba(0, 0, 0, 0.4);
+  max-width: 700rpx;
+  width: 90%;
+  box-sizing: border-box;
+}
+
+.title {
+  font-size: 60rpx;
+  font-weight: bolder;
+  color: var(--secondary-color); /* Use sharp yellow for emphasis */
+  margin-bottom: 30rpx;
+  text-shadow: 3rpx 3rpx 6rpx rgba(0, 0, 0, 0.5);
+  letter-spacing: 2rpx;
+}
+
+.subtitle {
+  font-size: 36rpx;
+  color: var(--text-color);
+  margin-bottom: 40rpx;
+  opacity: 0.9;
+  line-height: 1.5;
+}
+
+.game-session-id {
+  font-size: 28rpx;
+  color: var(--accent-color); /* Green accent for ID */
+  margin-bottom: 60rpx;
+  font-family: 'Courier New', Courier, monospace;
+  background-color: rgba(0,0,0,0.2);
+  padding: 10rpx 20rpx;
+  border-radius: 10rpx;
+}
+
+.button-primary {
+  width: 90%;
+  padding: 35rpx;
+  font-size: 40rpx;
+  margin-top: 50rpx;
+  background-color: var(--primary-color); /* Energetic orange */
+  box-shadow: 0 8rpx 20rpx rgba(0, 0, 0, 0.3);
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.button-primary:active {
+  transform: scale(0.9);
+  background-color: darken(var(--primary-color), 15%);
+  box-shadow: 0 4rpx 10rpx rgba(0, 0, 0, 0.2);
+}

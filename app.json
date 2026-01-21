@@ -1,0 +1,15 @@
+{
+  "pages": [
+    "pages/scan/scan",
+    "pages/success/success",
+    "pages/game/game"
+  ],
+  "window": {
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#000",
+    "navigationBarTitleText": "赛马摇一摇",
+    "navigationBarTextStyle": "white"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

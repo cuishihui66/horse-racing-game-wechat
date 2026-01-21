@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>赛马摇一摇 - 大屏显示</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-container">
+        <div class="header">
+            <h1 class="game-title">赛马摇一摇</h1>
+            <div class="qr-code-section">
+                <p>扫描二维码加入游戏</p>
+                <div class="qr-code-placeholder">
+                    <!-- QR Code will be generated here -->
+                    <img src="https://via.placeholder.com/150?text=Scan+Me" alt="QR Code" id="qrCodeImage">
+                </div>
+            </div>
+        </div>
+
+        <div class="race-track">
+            <div class="start-line"></div>
+            <div class="finish-line"></div>
+            <div id="horses-container" class="horses-container">
+                <!-- Horses will be dynamically added here -->
+            </div>
+        </div>
+
+        <div class="leaderboard">
+            <h2>实时排名</h2>
+            <ul id="realtime-rankings">
+                <!-- Real-time rankings will be displayed here -->
+            </ul>
+        </div>
+
+        <div id="final-rankings-overlay" class="final-rankings-overlay">
+            <div class="final-rankings-content">
+                <h2>游戏结束！最终排名</h2>
+                <ul id="final-rankings-list">
+                    <!-- Final rankings will be displayed here -->
+                </ul>
+                <button id="reset-game-button" class="reset-button">重置游戏</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,132 @@
+/* miniprogram/pages/accelerate/accelerate.wxss */
+page {
+  background: linear-gradient(135deg, #1abc9c, #16a085); /* Fresh, energetic green gradient */
+  overflow: hidden; /* Hide potential overflow from animations */
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around; /* Distribute space more evenly */
+  align-items: center;
+  height: 100vh; /* Full viewport height */
+  padding: 40rpx;
+  background-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10rpx 30rpx rgba(0, 0, 0, 0.4);
+  border-radius: 30rpx;
+  width: 90%;
+  max-width: 700rpx;
+  box-sizing: border-box;
+}
+
+.title {
+  font-size: 64rpx;
+  font-weight: bolder;
+  color: #fff; /* White title for contrast */
+  margin-bottom: 20rpx;
+  text-shadow: 4rpx 4rpx 8rpx rgba(0, 0, 0, 0.5);
+  letter-spacing: 3rpx;
+  animation: bounceIn 1s ease-out;
+}
+
+.tap-count {
+  font-size: 36rpx;
+  color: var(--secondary-color); /* Yellow for count */
+  margin-bottom: 40rpx;
+  font-weight: bold;
+  background-color: rgba(0,0,0,0.3);
+  padding: 10rpx 25rpx;
+  border-radius: 20rpx;
+  min-width: 200rpx;
+  text-align: center;
+  animation: fadeIn 1s ease-out;
+}
+
+.accelerate-button-wrapper {
+  position: relative;
+  width: 400rpx;
+  height: 400rpx;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--primary-color) 0%, #E65C00 100%); /* Orange-red gradient */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 15rpx 30rpx rgba(0, 0, 0, 0.4), inset 0 -5rpx 10rpx rgba(0, 0, 0, 0.2);
+  transition: transform 0.1s ease-out, background 0.3s ease;
+  animation: glowing 2s infinite alternate;
+  margin-bottom: 40rpx;
+}
+
+.accelerate-button-wrapper:active {
+  transform: scale(0.95);
+  box-shadow: 0 5rpx 15rpx rgba(0, 0, 0, 0.3), inset 0 -2rpx 5rpx rgba(0, 0, 0, 0.1);
+  background: radial-gradient(circle, #E65C00 0%, var(--primary-color) 100%);
+}
+
+.horse-icon {
+  width: 200rpx;
+  height: 200rpx;
+  animation: float 3s ease-in-out infinite;
+}
+
+.button-text {
+  color: white;
+  font-size: 48rpx;
+  font-weight: bolder;
+  margin-top: 10rpx;
+  text-shadow: 2rpx 2rpx 5rpx rgba(0, 0, 0, 0.4);
+}
+
+.instructions {
+  font-size: 28rpx;
+  color: var(--text-color);
+  opacity: 0.7;
+  margin-top: 20rpx;
+  animation: fadeIn 1.5s ease-out;
+}
+
+/* Animations */
+@keyframes bounceIn {
+  0%, 20%, 40%, 60%, 80%, 100% {
+    transition-timing-function: cubic-bezier(0.215, 0.61, 0.355, 1);
+  }
+  0% {
+    opacity: 0;
+    transform: scale3d(0.3, 0.3, 0.3);
+  }
+  20% {
+    transform: scale3d(1.1, 1.1, 1.1);
+  }
+  40% {
+    transform: scale3d(0.9, 0.9, 0.9);
+  }
+  60% {
+    opacity: 1;
+    transform: scale3d(1.03, 1.03, 1.03);
+  }
+  80% {
+    transform: scale3d(0.97, 0.97, 0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: scale3d(1, 1, 1);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes glowing {
+  0% { box-shadow: 0 0 15rpx var(--secondary-color), 0 15rpx 30rpx rgba(0, 0, 0, 0.4); }
+  50% { box-shadow: 0 0 30rpx var(--secondary-color), 0 15rpx 40rpx rgba(0, 0, 0, 0.6); }
+  100% { box-shadow: 0 0 15rpx var(--secondary-color), 0 15rpx 30rpx rgba(0, 0, 0, 0.4); }
+}
+
+@keyframes float {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-10rpx); }
+  100% { transform: translateY(0); }
+}

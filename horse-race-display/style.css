@@ -1,0 +1,273 @@
+/* style.css */
+
+:root {
+    --primary-bg: #1a237e; /* Dark Blue */
+    --secondary-bg: #283593; /* Medium Blue */
+    --accent-color-1: #ffeb3b; /* Yellow */
+    --accent-color-2: #ff4081; /* Pink */
+    --text-color: #e0e0e0; /* Light Gray */
+    --track-color: #424242; /* Dark Gray for track */
+    --line-color: #bdbdbd; /* Light Gray for lines */
+}
+
+body {
+    margin: 0;
+    font-family: 'Arial', sans-serif;
+    background-color: var(--primary-bg);
+    color: var(--text-color);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden;
+}
+
+.game-container {
+    width: 100vw;
+    height: 100vh;
+    display: grid;
+    grid-template-rows: 25vh 60vh 15vh; /* Header, Race Track, Leaderboard */
+    grid-template-columns: 100%;
+    background: linear-gradient(135deg, var(--primary-bg) 0%, var(--secondary-bg) 100%);
+    position: relative;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 5vw;
+    background-color: rgba(0, 0, 0, 0.2);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    z-index: 10;
+}
+
+.game-title {
+    font-size: 4vw;
+    color: var(--accent-color-1);
+    text-shadow: 0 0 10px var(--accent-color-1), 0 0 20px var(--accent-color-1);
+    letter-spacing: 0.2vw;
+    margin: 0;
+}
+
+.qr-code-section {
+    text-align: center;
+}
+
+.qr-code-section p {
+    font-size: 1.5vw;
+    margin-bottom: 1vh;
+}
+
+.qr-code-placeholder {
+    width: 10vw;
+    height: 10vw;
+    background-color: #fff;
+    padding: 0.5vw;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+.qr-code-placeholder img {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.race-track {
+    position: relative;
+    width: 90vw;
+    height: 100%;
+    margin: 0 auto;
+    background-color: var(--track-color);
+    border-left: 5px dashed var(--line-color);
+    border-right: 5px dashed var(--line-color);
+    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    overflow: hidden; /* Ensure horses stay within track visually */
+}
+
+.start-line, .finish-line {
+    position: absolute;
+    width: 100%;
+    height: 10px;
+    background-image: linear-gradient(to right, #fff 50%, transparent 50%), linear-gradient(to right, #000 50%, transparent 50%);
+    background-size: 20px 10px;
+    background-repeat: repeat-x;
+    z-index: 5;
+}
+
+.start-line {
+    top: 0;
+    transform: translateY(50%);
+}
+
+.finish-line {
+    bottom: 0;
+    transform: translateY(-50%);
+}
+
+.horses-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.horse-lane {
+    position: absolute;
+    height: 50px; /* Example height for a horse lane */
+    left: 0;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    transition: top 0.1s ease-out; /* Smooth vertical repositioning */
+}
+
+.horse {
+    position: absolute;
+    width: 80px; /* Example horse width */
+    height: 40px; /* Example horse height */
+    background-color: var(--accent-color-2); /* Placeholder horse color */
+    left: 0; /* Start at the left edge of the track */
+    transition: transform 0.1s linear; /* Smooth horizontal movement */
+    border-radius: 5px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 0.8vw;
+    font-weight: bold;
+    color: #fff;
+    box-shadow: 0 0 8px var(--accent-color-2), 0 0 15px var(--accent-color-2);
+}
+
+.horse.champion {
+    background-color: gold;
+    box-shadow: 0 0 15px gold, 0 0 30px gold;
+    transform: scale(1.1);
+}
+.horse.runner-up {
+    background-color: silver;
+    box-shadow: 0 0 15px silver, 0 0 30px silver;
+}
+.horse.third-place {
+    background-color: #cd7f32; /* Bronze */
+    box-shadow: 0 0 15px #cd7f32, 0 0 30px #cd7f32;
+}
+
+
+.leaderboard {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background-color: rgba(0, 0, 0, 0.3);
+    padding: 1vh 0;
+    box-shadow: 0 -5px 15px rgba(0, 0, 0, 0.3);
+    z-index: 10;
+}
+
+.leaderboard h2 {
+    font-size: 2vw;
+    color: var(--accent-color-1);
+    margin-bottom: 1vh;
+    text-shadow: 0 0 8px var(--accent-color-1);
+}
+
+#realtime-rankings {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    gap: 3vw;
+}
+
+#realtime-rankings li {
+    font-size: 1.5vw;
+    font-weight: bold;
+    color: var(--text-color);
+    background-color: rgba(255, 255, 255, 0.1);
+    padding: 0.5vh 1.5vw;
+    border-radius: 20px;
+}
+
+/* Final Rankings Overlay */
+.final-rankings-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.9);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+    visibility: hidden; /* Hidden by default */
+    opacity: 0;
+    transition: visibility 0.3s, opacity 0.3s ease-in-out;
+}
+
+.final-rankings-overlay.visible {
+    visibility: visible;
+    opacity: 1;
+}
+
+.final-rankings-content {
+    background-color: var(--secondary-bg);
+    padding: 5vw;
+    border-radius: 20px;
+    text-align: center;
+    box-shadow: 0 0 30px var(--accent-color-2), 0 0 60px var(--accent-color-1);
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.final-rankings-content h2 {
+    font-size: 3.5vw;
+    color: var(--accent-color-1);
+    margin-bottom: 3vh;
+    text-shadow: 0 0 15px var(--accent-color-1);
+}
+
+#final-rankings-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    font-size: 2vw;
+}
+
+#final-rankings-list li {
+    margin-bottom: 1.5vh;
+    padding: 0.5vh 2vw;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 2vw;
+}
+
+#final-rankings-list li.rank-1 { color: gold; font-size: 2.5vw; }
+#final-rankings-list li.rank-2 { color: silver; font-size: 2.3vw; }
+#final-rankings-list li.rank-3 { color: #cd7f32; font-size: 2.1vw; }
+
+.reset-button {
+    margin-top: 5vh;
+    padding: 2vh 4vw;
+    font-size: 2.5vw;
+    background-color: var(--accent-color-2);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    box-shadow: 0 0 10px var(--accent-color-2);
+    transition: all 0.3s ease;
+}
+
+.reset-button:hover {
+    background-color: #ff6e9a;
+    box-shadow: 0 0 20px var(--accent-color-2);
+}

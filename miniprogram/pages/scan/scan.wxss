@@ -1,0 +1,57 @@
+/* miniprogram/pages/scan/scan.wxss */
+page {
+  background: linear-gradient(135deg, var(--background-color), #4B6CB7); /* Gradient background */
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 80rpx 40rpx;
+  background-color: rgba(255, 255, 255, 0.15);
+  border-radius: 30rpx;
+  box-shadow: 0 10rpx 30rpx rgba(0, 0, 0, 0.4);
+  max-width: 700rpx;
+  width: 90%;
+  box-sizing: border-box;
+}
+
+.title {
+  font-size: 60rpx;
+  font-weight: bolder;
+  color: var(--secondary-color);
+  margin-bottom: 30rpx;
+  text-shadow: 3rpx 3rpx 6rpx rgba(0, 0, 0, 0.5);
+  letter-spacing: 2rpx;
+}
+
+.subtitle {
+  font-size: 32rpx;
+  color: var(--text-color);
+  margin-bottom: 80rpx;
+  opacity: 0.8;
+  line-height: 1.5;
+}
+
+.button-primary {
+  width: 90%;
+  padding: 35rpx;
+  font-size: 40rpx;
+  margin-top: 50rpx;
+  background-color: var(--primary-color);
+  box-shadow: 0 8rpx 20rpx rgba(0, 0, 0, 0.3);
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.button-primary:active {
+  transform: scale(0.9);
+  background-color: darken(var(--primary-color), 15%);
+  box-shadow: 0 4rpx 10rpx rgba(0, 0, 0, 0.2);
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}

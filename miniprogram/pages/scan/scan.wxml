@@ -1,0 +1,6 @@
+<!--miniprogram/pages/scan/scan.wxml-->
+<view class="container">
+  <text class="title">加入赛马游戏</text>
+  <text class="subtitle">请扫描大屏幕上的二维码</text>
+  <button class="button-primary" bindtap="scanCode">扫描二维码</button>
+</view>

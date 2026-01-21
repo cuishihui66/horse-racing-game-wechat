@@ -1,0 +1,10 @@
+<!--miniprogram/pages/accelerate/accelerate.wxml-->
+<view class="container">
+  <text class="title">加速冲刺！</text>
+  <text class="tap-count">已点击：{{tapCount}} 次</text>
+  <view class="accelerate-button-wrapper" bindtap="accelerateTap">
+    <image src="/images/horse_icon.png" class="horse-icon"></image>
+    <text class="button-text">疯狂点击</text>
+  </view>
+  <text class="instructions">点击屏幕，让你的小马跑起来！</text>
+</view>

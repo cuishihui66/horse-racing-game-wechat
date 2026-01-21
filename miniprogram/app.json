@@ -1,0 +1,15 @@
+{
+  "pages": [
+    "pages/scan/scan",
+    "pages/success/success",
+    "pages/accelerate/accelerate"
+  ],
+  "window": {
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#fff",
+    "navigationBarTitleText": "赛马摇一摇",
+    "navigationBarTextStyle": "black"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

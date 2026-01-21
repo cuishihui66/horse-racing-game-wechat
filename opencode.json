@@ -1,0 +1,53 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "gemini-claude-opus-4-5-thinking",
+  "provider": {
+    "anthropic": {
+      "options": {
+        "baseURL": "http://localhost:3000/claude-kiro-oauth/v1",
+        "apiKey": "123456"
+      },
+      "models": {
+        "claude-sonnet-4-5-20250929":{
+          "name": "Claude Sonnet 4.5 ",
+          "limit": { "context": 1048576, "output": 65536 },
+          "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] }
+        }
+      }
+    },
+    "openai": {
+      "options": {
+        "baseURL": "https://api.jiekou.ai/openai/v1",
+        "apiKey": ""
+      }
+    },
+    "gemini": {
+      "options": {
+        "baseURL": "http://localhost:3000/gemini-cli-oauth/v1",
+        "apiKey": "123456",
+      },
+      "models": {
+        "gemini-claude-opus-4-5-thinking": {
+          "name": "Claude Opus 4.5 Thinking (Gemini CLI)",
+          "limit": { "context": 200000, "output": 64000 },
+          "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] },
+          "variants": {
+            "low": { "thinkingConfig": { "thinkingBudget": 8192 } },
+            "max": { "thinkingConfig": { "thinkingBudget": 32768 } }
+          }
+        },
+        "gemini-3-pro-image-preview": {
+          "name": "Gemini 3 Flash (Gemini CLI)",
+          "limit": { "context": 1048576, "output": 65536 },
+          "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] }
+        },
+        "gemini-2.5-computer-use-preview-10-2025": {
+          "name": "Gemini 2.5 (Gemini CLI)",
+          "limit": { "context": 1048576, "output": 65536 },
+          "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] }
+        }
+      }
+    }
+  },
+  "plugin": ["oh-my-opencode","opencode-antigravity-auth@latest"]
+}

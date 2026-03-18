@@ -2,7 +2,7 @@
 const WEBSOCKET_URL = 'ws://localhost:3000'; // WebSocket server URL
 const GAME_UPDATE_INTERVAL_MS = 50; // Should match backend for smooth animation
 const TRACK_LENGTH = 1000; // Should match backend
-const HORSE_WIDTH = 80;
+const HORSE_WIDTH = 90;
 
 // Game State Variables
 let gameSessionId = null;
@@ -18,7 +18,7 @@ const finalRankingsOverlay = document.getElementById('final-rankings-overlay');
 const finalRankingsList = document.getElementById('final-rankings-list');
 const resetGameButton = document.getElementById('reset-game-button');
 const wallMessageContainer = document.getElementById('wall-message-container');
-
+const gameStatusElement = document.getElementById('game-status');
 
 // --- Utility Functions ---
 
@@ -36,7 +36,6 @@ function updateHorseDisplay(horseData) {
     const horseIndex = currentParticipantsArray.findIndex(p => p.userId === horseData.userId);
     const topPosition = horseIndex * laneHeight + (laneHeight / 2) - (HORSE_WIDTH / 4); // Center horse vertically in its lane
 
-
     if (!horseDiv) {
         // Create new horse element
         horseDiv = document.createElement('div');
@@ -44,15 +43,12 @@ function updateHorseDisplay(horseData) {
         horseDiv.id = `horse-${horseData.userId}`;
         horseDiv.style.position = 'absolute';
         horseDiv.style.width = `${HORSE_WIDTH}px`;
-        horseDiv.style.height = '40px'; // Fixed height for visual consistency
-        horseDiv.style.backgroundImage = `url(${horseData.horseImageUrl || '/assets/horses/default.png'})`; // Use actual image
-        horseDiv.style.backgroundSize = 'contain';
-        horseDiv.style.backgroundRepeat = 'no-repeat';
-        horseDiv.style.backgroundPosition = 'center';
+        horseDiv.style.height = '50px'; // Fixed height for visual consistency
         horseDiv.style.left = '0'; // Start at left
         horseDiv.style.transform = `translateX(${horseData.position}px)`; // Initial position
         horseDiv.style.top = `${topPosition}px`;
-        horseDiv.innerHTML = `<span class="wechat-name">${horseData.wechatNickname}</span>`; // Display name on horse
+        horseDiv.innerHTML = `<span class="horse-name">${horseData.wechatNickname}</span>`; // Display name on horse
+        horseDiv.classList.add('running'); // Add running animation
 
         horsesContainer.appendChild(horseDiv);
         participants.get(horseData.userId).element = horseDiv; // Store element reference
@@ -63,15 +59,38 @@ function updateHorseDisplay(horseData) {
     }
 
     // Update horse name
-    const wechatNameSpan = horseDiv.querySelector('.wechat-name');
-    if (wechatNameSpan) {
-        wechatNameSpan.textContent = horseData.wechatNickname;
+    const horseNameSpan = horseDiv.querySelector('.horse-name');
+    if (horseNameSpan) {
+        horseNameSpan.textContent = horseData.wechatNickname;
     }
 }
 
-// Function to redraw all horses (e.g., after participants change)
+// Function to redraw all horses and track lines
 function redrawHorses() {
-    horsesContainer.innerHTML = ''; // Clear all horses
+    // Clear previous track lines
+    const trackGrid = document.querySelector('.track-grid');
+    if (trackGrid) {
+        trackGrid.innerHTML = '';
+        // Draw lane lines if there are multiple participants
+        const currentParticipantsArray = Array.from(participants.values());
+        const laneCount = currentParticipantsArray.length;
+        if (laneCount > 1) {
+            const laneHeight = horsesContainer.clientHeight / laneCount;
+            for (let i = 1; i < laneCount; i++) {
+                const laneLine = document.createElement('div');
+                laneLine.className = 'lane-line';
+                laneLine.style.position = 'absolute';
+                laneLine.style.top = `${i * laneHeight}px`;
+                laneLine.style.width = '100%';
+                laneLine.style.height = '2px';
+                laneLine.style.background = 'rgba(255, 255, 255, 0.2)';
+                trackGrid.appendChild(laneLine);
+            }
+        }
+    }
+    
+    // Clear horses container and redraw all horses
+    horsesContainer.innerHTML = '';
     Array.from(participants.values()).forEach(horseData => {
         updateHorseDisplay(horseData);
     });
@@ -82,7 +101,7 @@ function updateRealtimeRankings(rankings) {
     realtimeRankingsList.innerHTML = '';
     rankings.forEach((entry, index) => {
         const li = document.createElement('li');
-        li.innerText = `${entry.rank}. ${entry.wechatNickname}`;
+        li.innerHTML = `<span>${entry.rank}.</span> <span>${entry.wechatNickname}</span>`;
         realtimeRankingsList.appendChild(li);
 
         // Update horse highlight
@@ -110,11 +129,34 @@ function displayFinalRankings(finalRankings) {
     finalRankingsOverlay.classList.add('visible');
 }
 
+// Updates the game status display
+function updateGameStatus(status) {
+    if (gameStatusElement) {
+        gameStatusElement.textContent = getStatusText(status);
+        gameStatusElement.className = 'game-status';
+        gameStatusElement.classList.add(`status-${status}`);
+    }
+}
+
+function getStatusText(status) {
+    switch(status) {
+        case 'waiting': return '等待开始';
+        case 'qr_scanning': return '扫码中';
+        case 'ready_to_start': return '准备开始';
+        case 'playing': return '比赛中';
+        case 'finished': return '已结束';
+        default: return '未知状态';
+    }
+}
+
 // Resets all game state and UI
 function resetGameUI() {
     gameStatus = 'waiting';
+    updateGameStatus(gameStatus);
     participants.clear();
     horsesContainer.innerHTML = '';
+    const trackGrid = document.querySelector('.track-grid');
+    if (trackGrid) trackGrid.innerHTML = '';
     realtimeRankingsList.innerHTML = '';
     finalRankingsOverlay.classList.remove('visible');
     qrCodeImage.src = "https://via.placeholder.com/150?text=Scan+Me"; // Reset QR
@@ -146,6 +188,9 @@ function connectWebSocket(sessionId) {
     socket.on('disconnect', (reason) => {
         console.log('Disconnected from WebSocket server:', reason);
         // Implement reconnection logic
+        setTimeout(() => {
+            connectWebSocket(sessionId);
+        }, 5000); // Try to reconnect after 5 seconds
     });
 
     socket.on('error', (error) => {
@@ -157,6 +202,7 @@ function connectWebSocket(sessionId) {
         console.log('Received initial game state:', data);
         gameSessionId = data.id;
         gameStatus = data.status;
+        updateGameStatus(gameStatus);
         if (data.qrCodeUrl) {
             qrCodeImage.src = data.qrCodeUrl;
         }
@@ -206,7 +252,9 @@ function connectWebSocket(sessionId) {
         console.log('Game started:', data);
         if (data.sessionId === gameSessionId) {
             gameStatus = data.status;
-            // Optionally show a "GO!" animation
+            updateGameStatus(gameStatus);
+            // Show a "GO!" animation
+            showGoAnimation();
         }
     });
 
@@ -223,6 +271,7 @@ function connectWebSocket(sessionId) {
         console.log('Game finished:', data);
         if (data.sessionId === gameSessionId) {
             gameStatus = data.status;
+            updateGameStatus(gameStatus);
             displayFinalRankings(data.finalRankings);
         }
     });
@@ -251,6 +300,46 @@ function connectWebSocket(sessionId) {
     });
 }
 
+// Show GO! animation when game starts
+function showGoAnimation() {
+    const goElement = document.createElement('div');
+    goElement.className = 'go-animation';
+    goElement.textContent = 'GO!';
+    goElement.style.position = 'absolute';
+    goElement.style.top = '50%';
+    goElement.style.left = '50%';
+    goElement.style.transform = 'translate(-50%, -50%)';
+    goElement.style.fontSize = '8vw';
+    goElement.style.color = '#fbbf24';
+    goElement.style.fontWeight = 'bold';
+    goElement.style.textShadow = '0 0 20px #fbbf24, 0 0 40px #fbbf24';
+    goElement.style.zIndex = '1000';
+    goElement.style.animation = 'goPulse 1s ease-out';
+    
+    document.querySelector('.race-track').appendChild(goElement);
+    
+    setTimeout(() => {
+        goElement.remove();
+    }, 1000);
+}
+
+// Add CSS for the GO! animation
+const goAnimationStyle = document.createElement('style');
+goAnimationStyle.textContent = `
+    @keyframes goPulse {
+        0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+        50% { transform: translate(-50%, -50%) scale(1.5); opacity: 1; }
+        100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+    }
+    
+    .status-waiting { color: #94a3b8; background: rgba(148, 163, 184, 0.2); }
+    .status-qr_scanning { color: #60a5fa; background: rgba(96, 165, 250, 0.2); }
+    .status-ready_to_start { color: #fbbf24; background: rgba(251, 191, 36, 0.2); }
+    .status-playing { color: #f87171; background: rgba(248, 113, 113, 0.2); }
+    .status-finished { color: #6ee7b7; background: rgba(110, 231, 183, 0.2); }
+`;
+document.head.appendChild(goAnimationStyle);
+
 // --- Wall Message Display Functions ---
 function addWallMessageToDisplay(message) {
     const messageCard = document.createElement('div');
@@ -258,7 +347,7 @@ function addWallMessageToDisplay(message) {
     messageCard.id = `wall-message-${message.id}`;
     messageCard.innerHTML = `
         <div class="message-header">
-            <img src="${message.avatarUrl || 'https://via.placeholder.com/30?text=A'}" class="message-avatar" alt="Avatar">
+            <div class="message-avatar">${message.wechatNickname.charAt(0).toUpperCase()}</div>
             <span class="message-nickname">${message.wechatNickname}</span>
         </div>
         <div class="message-content"></div>
@@ -327,143 +416,4 @@ document.addEventListener('DOMContentLoaded', () => {
             // socket.emit('request_game_reset', { sessionId: gameSessionId });
         }
     });
-});
-    }
-    return horses;
-}
-
-// Render horses on the track
-function renderHorses() {
-    const horsesContainer = document.getElementById('horses-container');
-    horsesContainer.innerHTML = ''; // Clear previous horses
-
-    // Dynamically adjust lane height based on number of horses
-    const laneHeight = (horsesContainer.clientHeight / participants.length);
-
-    participants.forEach((horse, index) => {
-        const horseDiv = document.createElement('div');
-        horseDiv.className = 'horse';
-        horseDiv.id = `horse-${horse.id}`;
-        horseDiv.style.top = `${index * laneHeight + (laneHeight / 2) - (HORSE_WIDTH / 4)}px`; // Center horse vertically in its lane
-        horseDiv.style.transform = `translateX(${horse.position}px)`;
-        horseDiv.innerText = horse.wechatName;
-        horsesContainer.appendChild(horseDiv);
-        horse.element = horseDiv; // Store reference to the DOM element
-    });
-}
-
-// Update horse positions and check for winners
-function updateGame() {
-    if (!gameStarted || gameEnded) return;
-
-    const trackWidth = document.querySelector('.race-track').clientWidth;
-    const effectiveTrackLength = trackWidth - HORSE_WIDTH; // Account for horse width
-
-    participants.forEach(horse => {
-        // Mock acceleration received from backend (for now, random tap)
-        // In real scenario, this 'acceleration' would come from WebSocket
-        horse.speed += (Math.random() * 0.1 - 0.05) + horse.acceleration * 0.1; // Random fluctuation + base acceleration
-        horse.speed = Math.max(0, Math.min(horse.speed, 20)); // Cap speed
-
-        horse.position += horse.speed;
-        horse.position = Math.min(horse.position, effectiveTrackLength); // Ensure horse doesn't go past finish line
-
-        if (horse.element) {
-            horse.element.style.transform = `translateX(${horse.position}px)`;
-        }
-
-        // Check if horse crossed finish line
-        if (horse.position >= effectiveTrackLength && !gameEnded) {
-            // Game ends when first horse crosses
-            gameEnded = true;
-            displayFinalRankings();
-            console.log(`${horse.wechatName} wins!`);
-            // Stop game update loop
-        }
-    });
-
-    updateRealtimeRankings();
-
-    if (!gameEnded) {
-        requestAnimationFrame(updateGame);
-    }
-}
-
-// Display real-time rankings (e.g., top 3)
-function updateRealtimeRankings() {
-    const rankingsList = document.getElementById('realtime-rankings');
-    rankingsList.innerHTML = '';
-
-    const sortedParticipants = [...participants].sort((a, b) => b.position - a.position);
-
-    // Display top 3 for real-time
-    for (let i = 0; i < Math.min(3, sortedParticipants.length); i++) {
-        const li = document.createElement('li');
-        li.innerText = `${i + 1}. ${sortedParticipants[i].wechatName}`;
-        rankingsList.appendChild(li);
-
-        // Highlight top horses on the track
-        if (sortedParticipants[i].element) {
-            sortedParticipants[i].element.classList.remove('champion', 'runner-up', 'third-place');
-            if (i === 0) sortedParticipants[i].element.classList.add('champion');
-            if (i === 1) sortedParticipants[i].element.classList.add('runner-up');
-            if (i === 2) sortedParticipants[i].element.classList.add('third-place');
-        }
-    }
-}
-
-// Display final rankings overlay
-function displayFinalRankings() {
-    const finalRankingsOverlay = document.getElementById('final-rankings-overlay');
-    const finalRankingsList = document.getElementById('final-rankings-list');
-    finalRankingsList.innerHTML = '';
-
-    // Sort by final position
-    const finalSortedParticipants = [...participants].sort((a, b) => b.position - a.position);
-
-    finalSortedParticipants.forEach((horse, index) => {
-        const li = document.createElement('li');
-        li.innerHTML = `<span>${index + 1}.</span> <span>${horse.wechatName}</span>`;
-        if (index === 0) li.classList.add('rank-1');
-        if (index === 1) li.classList.add('rank-2');
-        if (index === 2) li.classList.add('rank-3');
-        finalRankingsList.appendChild(li);
-    });
-
-    finalRankingsOverlay.classList.add('visible');
-}
-
-// Reset game state
-function resetGame() {
-    gameStarted = false;
-    gameEnded = false;
-    participants.forEach(horse => {
-        horse.position = 0;
-        horse.speed = 0;
-        horse.acceleration = Math.random() * 0.5 + 0.1; // Reset acceleration
-        if (horse.element) {
-            horse.element.classList.remove('champion', 'runner-up', 'third-place');
-        }
-    });
-    document.getElementById('final-rankings-overlay').classList.remove('visible');
-    renderHorses(); // Re-render to reset positions visually
-    updateRealtimeRankings(); // Clear rankings display
-}
-
-
-// Event Listeners
-document.addEventListener('DOMContentLoaded', () => {
-    // Initial setup
-    participants = generateMockParticipants(5); // Start with 5 mock participants
-    renderHorses();
-
-    // Mock host starting game after some time
-    setTimeout(() => {
-        gameStarted = true;
-        requestAnimationFrame(updateGame); // Start the animation loop
-        console.log("Game started!");
-    }, 5000); // Game starts 5 seconds after page load
-
-    // Reset button for final rankings overlay
-    document.getElementById('reset-game-button').addEventListener('click', resetGame);
 });

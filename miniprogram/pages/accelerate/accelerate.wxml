@@ -1,10 +1,30 @@
 <!--miniprogram/pages/accelerate/accelerate.wxml-->
 <view class="container">
-  <text class="title">加速冲刺！</text>
-  <text class="tap-count">已点击：{{tapCount}} 次</text>
-  <view class="accelerate-button-wrapper" bindtap="accelerateTap">
-    <image src="/images/horse_icon.png" class="horse-icon"></image>
-    <text class="button-text">疯狂点击</text>
+  <view class="header-section">
+    <text class="title">🏇 赛马冲刺</text>
+    <view class="status-bar">
+      <text class="tap-count">已点击：{{tapCount}} 次</text>
+      <text class="game-status">准备冲刺</text>
+    </view>
   </view>
-  <text class="instructions">点击屏幕，让你的小马跑起来！</text>
+  
+  <view class="accelerate-section">
+    <view class="accelerate-button-wrapper" bindtap="accelerateTap" hover-class="button-active">
+      <view class="horse-container">
+        <image src="/images/horse_icon.png" class="horse-icon" style="transform: rotate({{tapCount % 360}}deg);"></image>
+      </view>
+      <text class="button-text">点击加速！</text>
+      <view class="tap-effect" wx:if="{{isTapping}}"></view>
+    </view>
+  </view>
+  
+  <view class="instructions-section">
+    <text class="instructions">点击按钮加速，让你的小马领先！</text>
+    <view class="progress-container">
+      <view class="progress-bar">
+        <view class="progress-fill" style="width: {{Math.min(tapCount * 2, 100)}}%"></view>
+      </view>
+      <text class="progress-text">{{Math.min(Math.floor(tapCount * 2), 100)}}% 完成度</text>
+    </view>
+  </view>
 </view>

@@ -1,16 +1,17 @@
 // backend/src/game/entities/game-session.entity.ts
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany, Index } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, OneToMany } from 'typeorm';
 import { User } from '../../auth/entities/user.entity';
 import { Participant } from './participant.entity';
-import { WallMessage } from '../../wall/entities/wall-message.entity'; // Import WallMessage
+import { WallMessage } from '../../wall/entities/wall-message.entity';
 
 export enum GameSessionStatus {
   WAITING = 'waiting',
   QR_SCANNING = 'qr_scanning',
   READY_TO_START = 'ready_to_start',
+  COUNTDOWN = 'countdown',
   PLAYING = 'playing',
   FINISHED = 'finished',
-  RESETTING = 'resetting', // Used for internal state during reset operation
+  RESETTING = 'resetting',
 }
 
 @Entity('game_sessions')
@@ -21,10 +22,13 @@ export class GameSession {
   @ManyToOne(() => User, user => user.hostedSessions, { nullable: false })
   host: User;
 
+  @Column({ default: '赛马摇一摇' })
+  title: string;
+
   @Column({
     type: 'enum',
     enum: GameSessionStatus,
-    default: GameSessionStatus.WAITING,
+    default: GameSessionStatus.QR_SCANNING,
   })
   status: GameSessionStatus;
 
@@ -35,10 +39,16 @@ export class GameSession {
   endTime: Date;
 
   @Column({ nullable: true })
-  qrCodeUrl: string; // QR code for joining game session
+  qrCodeUrl: string;
 
   @Column({ nullable: true })
-  wallQrCodeUrl: string; // QR code for joining wall message
+  wallQrCodeUrl: string;
+
+  @Column({ type: 'float', default: 0.72 })
+  wallOpacity: number;
+
+  @Column({ default: 3 })
+  countdownSeconds: number;
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
@@ -46,7 +56,6 @@ export class GameSession {
   @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
 
-  // Relationships
   @OneToMany(() => Participant, participant => participant.gameSession)
   participants: Participant[];
 

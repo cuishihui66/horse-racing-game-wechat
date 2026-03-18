@@ -1,16 +1,18 @@
-// miniprogram/pages/success/success.js
+const app = getApp();
+
 Page({
   data: {
-    gameSessionId: ''
+    gameSessionId: '',
   },
-  onLoad: function (options) {
-    this.setData({
-      gameSessionId: options.gameSessionId || getApp().globalData.gameSessionId || '未知游戏编号'
-    });
+
+  onLoad(options) {
+    const gameSessionId = options.gameSessionId || app.globalData.gameSessionId || '';
+    this.setData({ gameSessionId });
   },
-  goToGame: function () {
+
+  goToGame() {
     wx.redirectTo({
-      url: '/pages/accelerate/accelerate',
+      url: `/pages/accelerate/accelerate?gameSessionId=${encodeURIComponent(this.data.gameSessionId)}`,
     });
-  }
-})
+  },
+});

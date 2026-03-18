@@ -1,106 +1,161 @@
-// miniprogram/pages/accelerate/accelerate.js
+const app = getApp();
+
+function formatStatusText(status, countdownEndsAt) {
+  switch (status) {
+    case 'qr_scanning':
+      return { title: '报名已完成', hint: '主持人准备赛道中，先发一条弹幕热热场。', canTap: false };
+    case 'ready_to_start':
+      return { title: '准备就绪', hint: '小马已经站上起跑线，等待主持人按下开始。', canTap: false };
+    case 'countdown': {
+      const seconds = Math.max(1, Math.ceil((Number(countdownEndsAt || 0) - Date.now()) / 1000));
+      return { title: `倒计时 ${seconds}`, hint: '马上开始，手指准备好。', canTap: false };
+    }
+    case 'playing':
+      return { title: '全速冲刺', hint: '点一次前进一格，越快越有机会进前五。', canTap: true };
+    case 'finished':
+      return { title: '比赛结束', hint: '等待大屏公布最终榜单。', canTap: false };
+    default:
+      return { title: '等待主持人创建游戏', hint: '请先扫码加入一场比赛。', canTap: false };
+  }
+}
+
 Page({
   data: {
-    tapCount: 0,
     gameSessionId: '',
+    sessionTitle: '赛马摇一摇',
+    statusTitle: '等待主持人准备',
+    phaseHint: '加入成功后，主持人会先让大家扫码入场。',
+    canTap: false,
     isTapping: false,
-    gameStatus: '准备冲刺',
-    tapHistory: []
+    tapCount: 0,
+    progressPercent: 0,
+    currentRank: '--',
+    messageContent: '',
+    isSending: false,
   },
 
-  onLoad: function (options) {
-    const app = getApp();
-    this.setData({
-      gameSessionId: app.globalData.gameSessionId || '未知游戏编号'
-    });
-    console.log('Accelerate page loaded for session:', this.data.gameSessionId);
-    
-    // Start tap rate monitoring
-    this.startTapRateMonitoring();
-  },
-
-  onShow: function() {
-    // 页面显示时的处理
-    this.updateGameStatus();
-  },
-
-  accelerateTap: function () {
-    // Only increment if game is active (mocked for now)
-    if (this.data.gameSessionId && this.data.gameSessionId !== '未知游戏编号') {
-      let newTapCount = this.data.tapCount + 1;
-      const tapTime = Date.now();
-      
-      this.setData({
-        tapCount: newTapCount,
-        isTapping: true, // For visual feedback if needed, e.g., to quickly change button state
-        tapHistory: [...this.data.tapHistory.slice(-9), tapTime] // Keep last 10 taps for rate calculation
-      });
-
-      // Simulate sending acceleration event to backend
-      console.log(`Sending acceleration for session ${this.data.gameSessionId}, tap count: ${newTapCount}`);
-      
-      // In a real scenario, this would send a WebSocket message or API call
-      // e.g., app.sendAcceleration(this.data.gameSessionId, newTapCount);
-
-      // Reset tapping state after a short delay for animation/feedback
-      setTimeout(() => {
-        this.setData({
-          isTapping: false
-        });
-      }, 100);
-      
-      // Update game status based on tap rate
-      this.updateGameStatus();
-    } else {
-      wx.showToast({
-        title: '请先扫码加入游戏',
-        icon: 'none',
-        duration: 2000
-      });
-      // Optionally navigate back to scan page
-      // wx.redirectTo({
-      //   url: '/pages/scan/scan',
-      // });
-    }
-  },
-
-  // Start monitoring tap rate for game status updates
-  startTapRateMonitoring: function() {
-    // Update status periodically
-    this.tapRateInterval = setInterval(() => {
-      this.updateGameStatus();
+  async onLoad(options) {
+    const gameSessionId = options.gameSessionId || app.globalData.gameSessionId || '';
+    this.setData({ gameSessionId });
+    await app.ensureDevUser();
+    this.refreshSessionState();
+    this.pollTimer = setInterval(() => {
+      this.refreshSessionState();
     }, 1000);
   },
 
-  // Calculate tap rate and update game status
-  updateGameStatus: function() {
-    const now = Date.now();
-    const recentTaps = this.data.tapHistory.filter(time => now - time < 1000); // Taps in last second
-    const tapRate = recentTaps.length;
-    
-    let status = '准备冲刺';
-    if (tapRate > 0) status = '蓄势待发';
-    if (tapRate > 3) status = '快速加速';
-    if (tapRate > 6) status = '全力冲刺';
-    if (tapRate > 10) status = '极限加速！';
-    
-    this.setData({
-      gameStatus: status
-    });
-  },
-
-  onUnload: function() {
-    // 清理定时器
-    if (this.tapRateInterval) {
-      clearInterval(this.tapRateInterval);
+  onUnload() {
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
     }
   },
 
-  onShareAppMessage: function () {
-    // Optional: Allow users to share the mini-program
-    return {
-      title: '快来参加赛马摇一摇游戏！',
-      path: '/pages/accelerate/accelerate'
-    };
-  }
-})
+  bindMessageInput(event) {
+    this.setData({ messageContent: event.detail.value });
+  },
+
+  async refreshSessionState() {
+    if (!this.data.gameSessionId) {
+      return;
+    }
+
+    try {
+      const response = await app.request({
+        url: `${app.getApiBaseUrl()}/game/${this.data.gameSessionId}/state`,
+        method: 'GET',
+        header: app.getAuthHeader({ 'Content-Type': 'application/json' }),
+      });
+
+      const session = response.data || {};
+      const currentUserId = app.globalData.currentUser?.id;
+      const participants = session.participants || [];
+      const currentParticipant = participants.find((item) => item.userId === currentUserId) || {};
+      const currentRankEntry =
+        (session.currentRankings || []).find((item) => item.userId === currentUserId) ||
+        (session.finalRankings || []).find((item) => item.userId === currentUserId);
+      const statusInfo = formatStatusText(session.status, session.countdownEndsAt);
+
+      this.setData({
+        sessionTitle: session.title || '赛马摇一摇',
+        statusTitle: statusInfo.title,
+        phaseHint: statusInfo.hint,
+        canTap: statusInfo.canTap,
+        tapCount: currentParticipant.tapCount || 0,
+        progressPercent: currentParticipant.progressPercent || 0,
+        currentRank: currentRankEntry ? currentRankEntry.rank : '--',
+      });
+    } catch (error) {
+      console.error('Failed to refresh session state:', error);
+    }
+  },
+
+  async accelerateTap() {
+    if (!this.data.gameSessionId) {
+      wx.showToast({ title: '请先加入比赛', icon: 'none' });
+      return;
+    }
+
+    if (!this.data.canTap) {
+      wx.showToast({ title: this.data.statusTitle, icon: 'none' });
+      return;
+    }
+
+    this.setData({ isTapping: true });
+    setTimeout(() => {
+      this.setData({ isTapping: false });
+    }, 120);
+
+    try {
+      const response = await app.request({
+        url: `${app.getApiBaseUrl()}/game/${this.data.gameSessionId}/accelerate`,
+        method: 'POST',
+        header: app.getAuthHeader({ 'Content-Type': 'application/json' }),
+      });
+
+      const payload = response.data || {};
+      if (payload.accepted === false) {
+        wx.showToast({ title: '当前还不能加速', icon: 'none' });
+      }
+
+      this.refreshSessionState();
+    } catch (error) {
+      console.error('Accelerate failed:', error);
+    }
+  },
+
+  async sendMessage() {
+    if (!this.data.gameSessionId) {
+      wx.showToast({ title: '请先加入比赛', icon: 'none' });
+      return;
+    }
+
+    if (!this.data.messageContent.trim()) {
+      wx.showToast({ title: '先写点内容再发送', icon: 'none' });
+      return;
+    }
+
+    this.setData({ isSending: true });
+    wx.showLoading({ title: '发送中...' });
+
+    try {
+      await app.request({
+        url: `${app.getApiBaseUrl()}/wall/${this.data.gameSessionId}/submit`,
+        method: 'POST',
+        data: {
+          type: 'text',
+          content: this.data.messageContent.trim(),
+        },
+        header: app.getAuthHeader({ 'Content-Type': 'application/json' }),
+      });
+
+      wx.showToast({ title: '已提交，等待审核', icon: 'success' });
+      this.setData({ messageContent: '' });
+    } catch (error) {
+      console.error('Send message failed:', error);
+      wx.showToast({ title: error.message || '发送失败', icon: 'none' });
+    } finally {
+      wx.hideLoading();
+      this.setData({ isSending: false });
+    }
+  },
+});

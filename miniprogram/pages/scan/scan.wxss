@@ -50,6 +50,40 @@ page {
   box-shadow: 0 4rpx 10rpx rgba(0, 0, 0, 0.2);
 }
 
+.manual-section {
+  width: 90%;
+  margin-top: 40rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.manual-label {
+  color: var(--text-color);
+  font-size: 26rpx;
+  opacity: 0.85;
+}
+
+.manual-input {
+  width: 100%;
+  padding: 24rpx;
+  border-radius: 20rpx;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-color);
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.button-secondary {
+  width: 100%;
+  padding: 28rpx;
+  border-radius: 50rpx;
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #fff;
+  background: var(--accent-color);
+}
+
 @keyframes pulse {
   0% { transform: scale(1); }
   50% { transform: scale(1.03); }

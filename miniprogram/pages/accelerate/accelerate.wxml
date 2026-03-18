@@ -1,30 +1,46 @@
-<!--miniprogram/pages/accelerate/accelerate.wxml-->
-<view class="container">
-  <view class="header-section">
-    <text class="title">🏇 赛马冲刺</text>
-    <view class="status-bar">
-      <text class="tap-count">已点击：{{tapCount}} 次</text>
-      <text class="game-status">准备冲刺</text>
-    </view>
+<view class="page">
+  <view class="hero-card">
+    <text class="kicker">RACE READY</text>
+    <text class="title">{{sessionTitle}}</text>
+    <text class="status-title">{{statusTitle}}</text>
+    <text class="phase-hint">{{phaseHint}}</text>
   </view>
-  
-  <view class="accelerate-section">
-    <view class="accelerate-button-wrapper" bindtap="accelerateTap" hover-class="button-active">
-      <view class="horse-container">
-        <image src="/images/horse_icon.png" class="horse-icon" style="transform: rotate({{tapCount % 360}}deg);"></image>
-      </view>
-      <text class="button-text">点击加速！</text>
-      <view class="tap-effect" wx:if="{{isTapping}}"></view>
-    </view>
+
+  <view class="message-card">
+    <text class="section-title">先发一条弹幕</text>
+    <textarea
+      class="message-input"
+      maxlength="80"
+      placeholder="给大屏留一句话，审核通过后会飘过去"
+      value="{{messageContent}}"
+      bindinput="bindMessageInput"
+    />
+    <button class="message-button" loading="{{isSending}}" bindtap="sendMessage">发送留言</button>
   </view>
-  
-  <view class="instructions-section">
-    <text class="instructions">点击按钮加速，让你的小马领先！</text>
-    <view class="progress-container">
-      <view class="progress-bar">
-        <view class="progress-fill" style="width: {{Math.min(tapCount * 2, 100)}}%"></view>
+
+  <view class="race-card">
+    <view class="race-stats">
+      <view class="stat-pill">
+        <text class="stat-label">我的点击</text>
+        <text class="stat-value">{{tapCount}}</text>
       </view>
-      <text class="progress-text">{{Math.min(Math.floor(tapCount * 2), 100)}}% 完成度</text>
+      <view class="stat-pill">
+        <text class="stat-label">当前排名</text>
+        <text class="stat-value">{{currentRank}}</text>
+      </view>
+      <view class="stat-pill">
+        <text class="stat-label">赛道进度</text>
+        <text class="stat-value">{{progressPercent}}%</text>
+      </view>
     </view>
+
+    <view class="progress-bar">
+      <view class="progress-fill" style="width: {{progressPercent}}%;"></view>
+    </view>
+
+    <button class="tap-button {{isTapping ? 'tap-button-active' : ''}}" disabled="{{!canTap}}" bindtap="accelerateTap">
+      <text class="tap-title">{{canTap ? '猛击加速' : '等待主持人开赛'}}</text>
+      <text class="tap-subtitle">{{canTap ? '点一次，小马前进一步' : phaseHint}}</text>
+    </button>
   </view>
 </view>

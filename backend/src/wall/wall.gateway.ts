@@ -16,6 +16,8 @@ import { UseGuards, Logger } from '@nestjs/common';
 import { WsJwtAuthGuard } from '../auth/guards/ws-jwt-auth.guard';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { WallMessageType } from './entities/wall-message.entity';
+import { GameService } from '../game/game.service';
 
 interface AuthenticatedSocket extends Socket {
   data: { user: { sub: string; openid: string; type?: string } }; // sub is userId
@@ -34,6 +36,7 @@ export class WallGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
 
   constructor(
     private readonly wallService: WallService,
+    private readonly gameService: GameService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
   ) {}
@@ -65,6 +68,16 @@ export class WallGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
 
       this.logger.log(`Wall Client ${client.id} authenticated as user ${payload.sub} (${clientType}).`);
 
+      if (clientType === 'large_screen' && !sessionId) {
+        await client.join('display-global');
+        const currentSession = await this.gameService.getCurrentDisplaySessionState();
+        if (currentSession?.id) {
+          const approvedMessages = await this.wallService.getApprovedWallMessages(currentSession.id);
+          client.emit('approved_wall_messages_init', approvedMessages);
+        }
+        return;
+      }
+
       if (sessionId) {
         // All wall message clients join their session room
         await client.join(sessionId);
@@ -74,15 +87,12 @@ export class WallGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         if (clientType === 'host_panel') {
             await client.join(`host-${sessionId}`);
             this.logger.log(`Host Client ${client.id} joined host room for session: ${sessionId}`);
-            // On host connect, send them pending messages for this session
-            const pendingMessages = await this.wallService.getPendingWallMessages(sessionId);
+            const pendingMessages = await this.wallService.getPendingWallMessages(sessionId, payload.sub);
             client.emit('pending_wall_messages', pendingMessages);
-            // Also send approved messages for initial view
-            const approvedMessages = await this.wallService.getApprovedWallMessages(sessionId);
+            const approvedMessages = await this.wallService.getApprovedWallMessages(sessionId, payload.sub);
             client.emit('approved_wall_messages_init', approvedMessages);
         }
 
-        // Large screen clients, on connect, request approved messages for initial display
         if (clientType === 'large_screen') {
             const approvedMessages = await this.wallService.getApprovedWallMessages(sessionId);
             client.emit('approved_wall_messages_init', approvedMessages);

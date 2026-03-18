@@ -2,6 +2,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from 'typeorm';
 import { GameSession } from '../../game/entities/game-session.entity';
 import { Participant } from '../../game/entities/participant.entity';
+import { WallMessage } from '../../wall/entities/wall-message.entity';
 
 @Entity('users') // Table name
 export class User {
@@ -29,4 +30,7 @@ export class User {
 
   @OneToMany(() => Participant, participant => participant.user)
   participations: Participant[];
+
+  @OneToMany(() => WallMessage, wallMessage => wallMessage.user)
+  wallMessages: WallMessage[];
 }

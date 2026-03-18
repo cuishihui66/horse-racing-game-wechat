@@ -4,249 +4,179 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>赛马摇一摇 - 主持人控制台</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="host-container">
-        <header class="main-header">
-            <div class="header-content">
-                <div class="logo-section">
-                    <h1 class="header-title">🐎 赛马摇一摇</h1>
-                    <span class="header-subtitle">主持人控制台</span>
-                </div>
-                <div class="header-actions">
-                    <div class="host-info">
-                        <span class="host-name">主持人: Admin</span>
-                        <div class="host-status-indicator active"></div>
-                    </div>
-                    <button class="btn btn-secondary logout-btn">登出</button>
-                </div>
+    <div id="login-view" class="login-shell">
+        <div class="login-card">
+            <p class="kicker">HOST CONTROL</p>
+            <h1>主持人控制台</h1>
+            <p class="login-note">本地联调默认账号：<code>admin</code> / <code>password</code></p>
+            <label class="field">
+                <span>账号</span>
+                <input id="username-input" type="text" value="admin" autocomplete="username">
+            </label>
+            <label class="field">
+                <span>密码</span>
+                <input id="password-input" type="password" value="password" autocomplete="current-password">
+            </label>
+            <button id="login-btn" class="primary-button">进入控制台</button>
+            <p id="login-status" class="login-status"></p>
+        </div>
+    </div>
+
+    <div id="app-shell" class="app-shell hidden">
+        <header class="topbar">
+            <div>
+                <p class="kicker">LIVE RACE COMMAND</p>
+                <h1>赛马摇一摇</h1>
+            </div>
+            <div class="topbar-actions">
+                <a id="display-link" class="ghost-button" href="http://localhost:8080" target="_blank" rel="noreferrer">打开大屏</a>
+                <button id="logout-btn" class="ghost-button" type="button">退出</button>
             </div>
         </header>
 
-        <div id="login-view" class="login-view active">
-            <div class="login-card">
-                <div class="login-header">
-                    <h2 class="login-title">🔐 主持人登录</h2>
-                    <p class="login-subtitle">请输入您的管理员凭据</p>
-                </div>
-                <div class="input-group">
-                    <label for="username-input">用户名</label>
-                    <input type="text" id="username-input" placeholder="输入用户名" value="admin">
-                </div>
-                <div class="input-group">
-                    <label for="password-input">密码</label>
-                    <input type="password" id="password-input" placeholder="输入密码" value="password">
-                </div>
-                <button id="login-btn" class="btn btn-primary large-btn">登录 →</button>
-                <p class="login-status" id="login-status"></p>
-            </div>
-        </div>
-
-        <main class="main-content hidden">
-            <aside class="sidebar">
-                <nav class="nav-menu">
-                    <div class="nav-section">
-                        <h3 class="nav-section-title">主菜单</h3>
-                        <ul>
-                            <li class="nav-item active" data-view="dashboard">
-                                <span class="nav-icon">📊</span>
-                                <span class="nav-text">仪表盘</span>
-                            </li>
-                            <li class="nav-item" data-view="game-control">
-                                <span class="nav-icon">🎮</span>
-                                <span class="nav-text">游戏控制</span>
-                            </li>
-                        </ul>
-                    </div>
-                    <div class="nav-section">
-                        <h3 class="nav-section-title">互动功能</h3>
-                        <ul>
-                            <li class="nav-item" data-view="wall-messages">
-                                <span class="nav-icon">💬</span>
-                                <span class="nav-text">留言墙管理</span>
-                            </li>
-                        </ul>
-                    </div>
-                </nav>
-            </aside>
-
-            <section class="content-area">
-                <!-- Dashboard View -->
-                <div id="dashboard-view" class="view active">
-                    <div class="view-header">
-                        <div class="view-title-section">
-                            <h2 class="section-title">📈 会话概览</h2>
-                            <p class="section-subtitle">管理当前和历史游戏会话</p>
-                        </div>
-                        <button id="create-session-btn" class="btn btn-primary">➕ 创建新会话</button>
-                    </div>
-
-                    <div class="stats-grid">
-                        <div class="stat-card">
-                            <div class="stat-icon active">🎮</div>
-                            <div class="stat-info">
-                                <div class="stat-number">2</div>
-                                <div class="stat-label">活跃会话</div>
-                            </div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-icon total">👥</div>
-                            <div class="stat-info">
-                                <div class="stat-number">45</div>
-                                <div class="stat-label">总参与者</div>
-                            </div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-icon completed">🏆</div>
-                            <div class="stat-info">
-                                <div class="stat-number">8</div>
-                                <div class="stat-label">已完成</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="card-list">
-                        <h3 class="section-subtitle">近期会话</h3>
-                        <div class="session-card">
-                            <div class="session-header">
-                                <div class="session-id">#SESSION-ABC456</div>
-                                <div class="session-status status-active">进行中</div>
-                            </div>
-                            <div class="session-details">
-                                <div class="session-meta">
-                                    <span class="session-date">2024-01-21</span>
-                                    <span class="session-participants">👥 12 参与者</span>
-                                </div>
-                                <div class="session-actions">
-                                    <button class="btn btn-primary manage-btn" data-session-id="SESSION-ABC456">管理</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="session-card">
-                            <div class="session-header">
-                                <div class="session-id">#SESSION-XYZ123</div>
-                                <div class="session-status status-completed">已完成</div>
-                            </div>
-                            <div class="session-details">
-                                <div class="session-meta">
-                                    <span class="session-date">2024-01-20</span>
-                                    <span class="session-participants">👥 33 参与者</span>
-                                </div>
-                                <div class="session-actions">
-                                    <button class="btn btn-secondary manage-btn" data-session-id="SESSION-XYZ123">查看详情</button>
-                                </div>
-                            </div>
-                        </div>
+        <main class="dashboard">
+            <section class="panel composer-panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="panel-eyebrow">CREATE</p>
+                        <h2>新建游戏</h2>
                     </div>
                 </div>
+                <label class="field">
+                    <span>游戏主题</span>
+                    <input id="game-title-input" type="text" maxlength="40" placeholder="例如：年度冲刺赛">
+                </label>
+                <button id="create-session-btn" class="primary-button" type="button">新建游戏并开放扫码</button>
+                <p id="create-feedback" class="subtle-note">创建后，大屏会直接进入扫码报名阶段。</p>
+            </section>
 
-                <!-- Game Control View -->
-                <div id="game-control-view" class="view">
-                    <div class="view-header">
-                        <div class="view-title-section">
-                            <h2 class="section-title">🎮 游戏控制</h2>
-                            <div class="session-id-display" id="current-session-id">#SESSION-ABC456</div>
-                        </div>
-                        <div class="game-status-badge">
-                            <span id="game-current-status" class="status-indicator status-active">准备就绪</span>
-                            <span id="game-participant-count" class="participant-count">👥 0 人参与</span>
-                        </div>
+            <section class="panel live-panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="panel-eyebrow">LIVE SESSION</p>
+                        <h2 id="current-session-title">当前没有激活场次</h2>
                     </div>
-
-                    <div class="control-grid">
-                        <!-- QR Code Management Card -->
-                        <div class="card qr-card">
-                            <div class="card-header">
-                                <h3 class="card-title">📱 扫码加入</h3>
-                                <div class="qr-status-indicator active"></div>
-                            </div>
-                            <div class="qr-content">
-                                <div class="qr-code-display">
-                                    <img id="qr-code-img" src="https://via.placeholder.com/200?text=QR+Code+Placeholder" alt="Game Session QR Code">
-                                    <div id="qr-overlay" class="qr-overlay hidden">扫码激活</div>
-                                </div>
-                                <div class="qr-info">
-                                    <p>让参与者扫描二维码加入游戏</p>
-                                </div>
-                            </div>
-                            <div class="qr-actions">
-                                <button id="toggle-qr-scan-btn" class="btn btn-primary">🚀 启动扫码</button>
-                                <button id="view-participants-btn" class="btn btn-secondary">👥 查看参与者 (0)</button>
-                            </div>
-                        </div>
-
-                        <!-- Game Actions Card -->
-                        <div class="card actions-card">
-                            <div class="card-header">
-                                <h3 class="card-title">⚙️ 游戏控制</h3>
-                            </div>
-                            <div class="actions-content">
-                                <button id="start-race-btn" class="btn btn-success large-btn" disabled>🏁 开始比赛</button>
-                                <button id="reset-game-btn" class="btn btn-warning large-btn" disabled>🔄 重置游戏</button>
-                                <button id="end-session-btn" class="btn btn-danger large-btn">🛑 结束会话</button>
-                            </div>
-                        </div>
+                    <span id="current-status-pill" class="status-pill is-idle">待命</span>
+                </div>
+                <div class="session-meta-grid">
+                    <div class="metric-card">
+                        <span class="metric-label">场次 ID</span>
+                        <strong id="current-session-id">-</strong>
                     </div>
-                    
-                    <!-- Game Progress Section -->
-                    <div class="card game-progress-card">
-                        <div class="card-header">
-                            <h3 class="card-title">📍 实时进度</h3>
-                        </div>
-                        <div class="progress-content">
-                            <div class="progress-bar">
-                                <div class="progress-fill" style="width: 35%;"></div>
-                            </div>
-                            <div class="progress-info">
-                                <span>比赛进度: 35%</span>
-                                <span>预计结束: 2分15秒</span>
-                            </div>
-                        </div>
+                    <div class="metric-card">
+                        <span class="metric-label">参与人数</span>
+                        <strong id="current-participant-count">0</strong>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">冲线进度</span>
+                        <strong id="current-finish-progress">0 / 0</strong>
                     </div>
                 </div>
-                
-                <!-- Wall Messages View -->
-                <div id="wall-messages-view" class="view">
-                    <div class="view-header">
-                        <div class="view-title-section">
-                            <h2 class="section-title">💬 留言墙管理</h2>
-                            <p class="section-subtitle">审核和管理用户留言</p>
-                        </div>
-                        <div class="wall-status-section">
-                            <span id="wall-status" class="status-indicator status-active">开启</span>
-                            <span id="wall-pending-count">⏳ 待审核: 0</span>
-                            <button id="wall-toggle-active-btn" class="btn btn-secondary">关闭留言墙</button>
+                <div class="control-actions">
+                    <button id="reopen-join-btn" class="secondary-button" type="button">重新开放扫码</button>
+                    <button id="prepare-game-btn" class="secondary-button" type="button">准备游戏</button>
+                    <button id="start-race-btn" class="primary-button" type="button">开始比赛</button>
+                    <button id="reset-game-btn" class="danger-button" type="button">重置本场</button>
+                </div>
+                <div class="wall-setting-row">
+                    <label for="wall-opacity-slider">弹幕透明度</label>
+                    <input id="wall-opacity-slider" type="range" min="15" max="100" value="72">
+                    <span id="wall-opacity-value">72%</span>
+                </div>
+                <div class="dev-tools">
+                    <div class="panel-header compact">
+                        <div>
+                            <p class="panel-eyebrow">DEV DEMO</p>
+                            <h2>假用户联调</h2>
                         </div>
                     </div>
-
-                    <div class="wall-grid">
-                        <div class="card pending-messages-card">
-                            <div class="card-header">
-                                <h3 class="card-title">⏳ 待审核消息 (<span id="pending-messages-count">0</span>)</h3>
-                            </div>
-                            <div id="pending-messages-list" class="message-list">
-                                <!-- Pending messages will be loaded here -->
-                                <p class="no-messages">暂无待审核消息</p>
-                            </div>
-                        </div>
-                        <div class="card approved-messages-card">
-                            <div class="card-header">
-                                <h3 class="card-title">✅ 已通过消息 (<span id="approved-messages-count">0</span>)</h3>
-                            </div>
-                            <div id="approved-messages-list" class="message-list">
-                                <!-- Approved messages will be loaded here -->
-                                <p class="no-messages">暂无已通过消息</p>
-                            </div>
-                        </div>
+                    <div class="inline-control-row">
+                        <label class="field compact-field">
+                            <span>生成数量</span>
+                            <input id="fake-user-count" type="number" min="1" max="30" value="8">
+                        </label>
+                        <button id="generate-fake-users-btn" class="secondary-button" type="button">随机生成假用户</button>
+                    </div>
+                    <label class="toggle-row" for="auto-bot-sim-toggle">
+                        <input id="auto-bot-sim-toggle" type="checkbox" checked>
+                        <span>点击开始比赛后，自动启动假用户点击模拟</span>
+                    </label>
+                    <div class="control-actions dev-actions">
+                        <button id="start-bot-sim-btn" class="secondary-button" type="button">启动模拟点击</button>
+                        <button id="stop-bot-sim-btn" class="danger-button" type="button">停止模拟点击</button>
                     </div>
                 </div>
+            </section>
+
+            <section class="panel qr-panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="panel-eyebrow">ENTRY</p>
+                        <h2>扫码入口</h2>
+                    </div>
+                </div>
+                <div class="qr-wrap">
+                    <img id="qr-code-img" src="" alt="游戏二维码">
+                </div>
+                <div class="link-block">
+                    <span>参与链接</span>
+                    <code id="join-url-text">-</code>
+                </div>
+                <div class="link-block">
+                    <span>留言链接</span>
+                    <code id="wall-url-text">-</code>
+                </div>
+            </section>
+
+            <section class="panel roster-panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="panel-eyebrow">RIDERS</p>
+                        <h2>参赛用户</h2>
+                    </div>
+                </div>
+                <div id="participant-list" class="participant-list empty-state">等待扫码加入</div>
+            </section>
+
+            <section class="panel moderation-panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="panel-eyebrow">MODERATION</p>
+                        <h2>待审核弹幕</h2>
+                    </div>
+                    <span id="pending-count-badge" class="count-badge">0</span>
+                </div>
+                <div id="pending-messages-list" class="message-list empty-state">暂无待审核消息</div>
+            </section>
+
+            <section class="panel approved-panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="panel-eyebrow">ON AIR</p>
+                        <h2>已通过弹幕</h2>
+                    </div>
+                    <span id="approved-count-badge" class="count-badge">0</span>
+                </div>
+                <div id="approved-messages-list" class="message-list empty-state">暂无已通过消息</div>
+            </section>
+
+            <section class="panel history-panel">
+                <div class="panel-header">
+                    <div>
+                        <p class="panel-eyebrow">ARCHIVE</p>
+                        <h2>历史场次</h2>
+                    </div>
+                </div>
+                <div id="history-list" class="history-list empty-state">还没有历史记录</div>
             </section>
         </main>
     </div>
 
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="config.js"></script>
+    <script src="socket.io.min.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

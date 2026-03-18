@@ -1,47 +1,94 @@
-// backend/src/wall/wall.service.ts
 import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { Server } from 'socket.io';
 import { WallMessage, WallMessageType, WallMessageStatus } from './entities/wall-message.entity';
 import { User } from '../auth/entities/user.entity';
-import { GameSession, GameSessionStatus } from '../game/entities/game-session.entity';
-import { ConfigService } from '@nestjs/config';
-import { Server } from 'socket.io'; // Import Server for typing
+import { GameSession } from '../game/entities/game-session.entity';
 
 @Injectable()
 export class WallService {
   private readonly logger = new Logger(WallService.name);
-  private socketServer: Server; // Reference to the Socket.IO server
-
-  // Simple sensitive word list for demonstration
-  private sensitiveWords = ['fuck', 'shit', 'bitch', 'asshole']; // Replace with actual sensitive word management
+  private socketServer: Server;
+  private readonly sensitiveWords = ['fuck', 'shit', 'bitch', 'asshole'];
 
   constructor(
     @InjectRepository(WallMessage)
-    private wallMessageRepository: Repository<WallMessage>,
+    private readonly wallMessageRepository: Repository<WallMessage>,
     @InjectRepository(GameSession)
-    private gameSessionRepository: Repository<GameSession>,
+    private readonly gameSessionRepository: Repository<GameSession>,
     @InjectRepository(User)
-    private userRepository: Repository<User>,
-    private readonly configService: ConfigService,
+    private readonly userRepository: Repository<User>,
   ) {}
 
-  /**
-   * Set the Socket.IO server instance. This is needed for WallService to broadcast events.
-   * Called by WallGateway after initialization.
-   */
   setSocketServer(server: Server) {
     this.socketServer = server;
   }
 
-  // --- Utility for Sensitive Word Filtering ---
-  private containsSensitiveWords(text: string): boolean {
-    if (!text) return false;
-    const lowerText = text.toLowerCase();
-    return this.sensitiveWords.some(word => lowerText.includes(word));
+  private emitToDisplay(eventName: string, payload: unknown) {
+    this.socketServer?.to('display-global').emit(eventName, payload);
   }
 
-  // --- User/Mini-Program API ---
+  private containsSensitiveWords(text: string): boolean {
+    if (!text) {
+      return false;
+    }
+
+    const lowerText = text.toLowerCase();
+    return this.sensitiveWords.some((word) => lowerText.includes(word));
+  }
+
+  private serializeMessage(message: WallMessage) {
+    return {
+      id: message.id,
+      messageId: message.id,
+      gameSessionId: message.gameSession?.id,
+      wechatNickname: message.wechatNickname,
+      avatarUrl: message.avatarUrl,
+      type: message.type,
+      content: message.content,
+      imageUrl: message.imageUrl,
+      status: message.status,
+      isTop: message.isTop,
+      createdAt: message.createdAt instanceof Date ? message.createdAt.toISOString() : message.createdAt,
+      approvedAt: message.approvedAt instanceof Date ? message.approvedAt.toISOString() : message.approvedAt,
+    };
+  }
+
+  private async getSessionOrThrow(gameSessionId: string, hostId?: string) {
+    const session = await this.gameSessionRepository.findOne({
+      where: { id: gameSessionId },
+      relations: ['host'],
+    });
+
+    if (!session) {
+      throw new NotFoundException('Game session not found');
+    }
+
+    if (hostId && session.host.id !== hostId) {
+      throw new ForbiddenException('Only the session host can manage wall messages');
+    }
+
+    return session;
+  }
+
+  private async getMessageForModeration(messageId: string, hostId: string) {
+    const message = await this.wallMessageRepository.findOne({
+      where: { id: messageId },
+      relations: ['gameSession', 'gameSession.host', 'user'],
+    });
+
+    if (!message) {
+      throw new NotFoundException('Wall message not found');
+    }
+
+    if (message.gameSession.host.id !== hostId) {
+      throw new ForbiddenException('Only the session host can manage wall messages');
+    }
+
+    return message;
+  }
+
   async submitWallMessage(
     gameSessionId: string,
     userId: string,
@@ -49,13 +96,7 @@ export class WallService {
     content?: string,
     imageUrl?: string,
   ) {
-    const gameSession = await this.gameSessionRepository.findOne({ where: { id: gameSessionId } });
-    if (!gameSession) {
-      throw new NotFoundException('Game session not found');
-    }
-    // Check if wall message is allowed for this session (e.g., is_wall_enabled flag on GameSession)
-    // For now, assume it's always enabled if session exists.
-
+    const session = await this.getSessionOrThrow(gameSessionId);
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException('User not found');
@@ -65,154 +106,116 @@ export class WallService {
       throw new BadRequestException('Message content or image URL is required');
     }
 
-    // Sensitive word filtering
     if (content && this.containsSensitiveWords(content)) {
-      this.logger.warn(`Sensitive content detected from user ${userId} in session ${gameSessionId}`);
-      // Option 1: Reject message directly
-      throw new BadRequestException('消息包含敏感词，无法发送。');
-      // Option 2: Mark for review and notify host
-      // status = WallMessageStatus.PENDING; // Already default
+      throw new BadRequestException('消息包含敏感词，无法发送');
     }
 
     const wallMessage = this.wallMessageRepository.create({
-      gameSession,
+      gameSession: session,
       user,
-      wechatNickname: user.wechatNickname || `用户${user.id.substring(0, 4)}`, // Use nickname if available
+      wechatNickname: user.wechatNickname || `用户${user.id.slice(0, 4)}`,
       avatarUrl: user.avatarUrl,
       type,
       content,
       imageUrl,
-      status: WallMessageStatus.PENDING, // Always pending for moderation
+      status: WallMessageStatus.PENDING,
       isTop: false,
     });
-    await this.wallMessageRepository.save(wallMessage);
 
-    this.logger.log(`New wall message (${wallMessage.id}) submitted to session ${gameSessionId} by user ${userId}`);
-
-    // Notify host panel about new pending message (via WebSocket)
-    this.socketServer?.to(`host-${gameSessionId}`).emit('wall_message_pending', wallMessage);
-
-    return wallMessage;
+    const savedMessage = await this.wallMessageRepository.save(wallMessage);
+    const payload = this.serializeMessage(savedMessage);
+    this.socketServer?.to(`host-${gameSessionId}`).emit('wall_message_pending', payload);
+    return payload;
   }
 
-  // --- Host Panel API ---
-
-  async getPendingWallMessages(gameSessionId: string) {
-    const gameSession = await this.gameSessionRepository.findOne({ where: { id: gameSessionId } });
-    if (!gameSession) {
-      throw new NotFoundException('Game session not found');
-    }
-    return this.wallMessageRepository.find({
+  async getPendingWallMessages(gameSessionId: string, hostId?: string) {
+    await this.getSessionOrThrow(gameSessionId, hostId);
+    const messages = await this.wallMessageRepository.find({
       where: { gameSession: { id: gameSessionId }, status: WallMessageStatus.PENDING },
-      relations: ['user'], // Load user info
+      relations: ['user', 'gameSession'],
       order: { createdAt: 'ASC' },
     });
+
+    return messages.map((message) => this.serializeMessage(message));
   }
 
-  async getApprovedWallMessages(gameSessionId: string) {
-    const gameSession = await this.gameSessionRepository.findOne({ where: { id: gameSessionId } });
-    if (!gameSession) {
-      throw new NotFoundException('Game session not found');
-    }
-    return this.wallMessageRepository.find({
+  async getApprovedWallMessages(gameSessionId: string, hostId?: string) {
+    await this.getSessionOrThrow(gameSessionId, hostId);
+    const messages = await this.wallMessageRepository.find({
       where: { gameSession: { id: gameSessionId }, status: WallMessageStatus.APPROVED },
-      relations: ['user'],
-      order: { isTop: 'DESC', approvedAt: 'DESC' }, // Show top messages first, then by approval time
+      relations: ['user', 'gameSession'],
+      order: { isTop: 'DESC', approvedAt: 'DESC' },
     });
+
+    return messages.map((message) => this.serializeMessage(message));
   }
 
   async approveWallMessage(messageId: string, hostId: string) {
-    const message = await this.wallMessageRepository.findOne({ where: { id: messageId }, relations: ['gameSession', 'user'] });
-    if (!message) {
-      throw new NotFoundException('Wall message not found');
-    }
-    // Verify if hostId is actually the host of the gameSession
+    const message = await this.getMessageForModeration(messageId, hostId);
     const hostUser = await this.userRepository.findOne({ where: { id: hostId } });
-    if (!hostUser || message.gameSession.host.id !== hostId) {
-      throw new ForbiddenException('Only the session host can approve messages');
+    if (!hostUser) {
+      throw new NotFoundException('Host user not found');
     }
 
     message.status = WallMessageStatus.APPROVED;
     message.approvedAt = new Date();
     message.approvedBy = hostUser;
-    await this.wallMessageRepository.save(message);
+    const savedMessage = await this.wallMessageRepository.save(message);
+    const payload = this.serializeMessage(savedMessage);
 
-    this.logger.log(`Wall message (${message.id}) approved by host ${hostId} for session ${message.gameSession.id}`);
-    // Broadcast to large screen (via WebSocket)
-    this.socketServer?.to(message.gameSession.id).emit('wall_message_approved', {
-      id: message.id,
-      gameSessionId: message.gameSession.id,
-      wechatNickname: message.wechatNickname,
-      avatarUrl: message.avatarUrl,
-      type: message.type,
-      content: message.content,
-      imageUrl: message.imageUrl,
-      isTop: message.isTop,
-      createdAt: message.createdAt.toISOString(),
-    });
+    this.socketServer?.to(message.gameSession.id).emit('wall_message_approved', payload);
+    this.socketServer?.to(`host-${message.gameSession.id}`).emit('wall_message_approved', payload);
+    this.emitToDisplay('wall_message_approved', payload);
 
-    return message;
+    return payload;
   }
 
   async rejectWallMessage(messageId: string, hostId: string) {
-    const message = await this.wallMessageRepository.findOne({ where: { id: messageId }, relations: ['gameSession'] });
-    if (!message) {
-      throw new NotFoundException('Wall message not found');
-    }
-    const hostUser = await this.userRepository.findOne({ where: { id: hostId } });
-    if (!hostUser || message.gameSession.host.id !== hostId) {
-      throw new ForbiddenException('Only the session host can reject messages');
-    }
-
+    const message = await this.getMessageForModeration(messageId, hostId);
     message.status = WallMessageStatus.REJECTED;
-    // message.approvedBy = hostUser; // Optional: record who rejected
     await this.wallMessageRepository.save(message);
 
-    this.logger.log(`Wall message (${message.id}) rejected by host ${hostId} for session ${message.gameSession.id}`);
-    // Optionally notify large screen to remove if it was mistakenly displayed (not in current '先审后上' flow)
-    return message;
+    const payload = {
+      id: message.id,
+      messageId: message.id,
+      gameSessionId: message.gameSession.id,
+    };
+    this.socketServer?.to(`host-${message.gameSession.id}`).emit('wall_message_deleted', payload);
+    this.emitToDisplay('wall_message_deleted', payload);
+    return { id: message.id, status: message.status };
   }
 
   async deleteWallMessage(messageId: string, hostId: string) {
-    const message = await this.wallMessageRepository.findOne({ where: { id: messageId }, relations: ['gameSession'] });
-    if (!message) {
-      throw new NotFoundException('Wall message not found');
-    }
-    const hostUser = await this.userRepository.findOne({ where: { id: hostId } });
-    if (!hostUser || message.gameSession.host.id !== hostId) {
-      throw new ForbiddenException('Only the session host can delete messages');
-    }
-
+    const message = await this.getMessageForModeration(messageId, hostId);
     await this.wallMessageRepository.remove(message);
-    this.logger.log(`Wall message (${message.id}) deleted by host ${hostId} from session ${message.gameSession.id}`);
-    // Broadcast deletion to large screen (via WebSocket)
-    this.socketServer?.to(message.gameSession.id).emit('wall_message_deleted', {
+
+    const payload = {
       id: message.id,
+      messageId: message.id,
       gameSessionId: message.gameSession.id,
-    });
+    };
+    this.socketServer?.to(message.gameSession.id).emit('wall_message_deleted', payload);
+    this.socketServer?.to(`host-${message.gameSession.id}`).emit('wall_message_deleted', payload);
+    this.emitToDisplay('wall_message_deleted', payload);
+
     return { message: 'Message deleted successfully' };
   }
 
   async toggleTopWallMessage(messageId: string, hostId: string, isTop: boolean) {
-    const message = await this.wallMessageRepository.findOne({ where: { id: messageId }, relations: ['gameSession'] });
-    if (!message) {
-      throw new NotFoundException('Wall message not found');
-    }
-    const hostUser = await this.userRepository.findOne({ where: { id: hostId } });
-    if (!hostUser || message.gameSession.host.id !== hostId) {
-      throw new ForbiddenException('Only the session host can toggle top status');
-    }
-
+    const message = await this.getMessageForModeration(messageId, hostId);
     message.isTop = isTop;
-    await this.wallMessageRepository.save(message);
+    const savedMessage = await this.wallMessageRepository.save(message);
 
-    this.logger.log(`Wall message (${message.id}) top status toggled to ${isTop} by host ${hostId}`);
-    // Broadcast update to large screen (via WebSocket)
-    this.socketServer?.to(message.gameSession.id).emit('wall_message_updated', {
-      id: message.id,
-      gameSessionId: message.gameSession.id,
-      updates: { isTop: message.isTop },
-    });
-    return message;
+    const payload = {
+      id: savedMessage.id,
+      messageId: savedMessage.id,
+      gameSessionId: savedMessage.gameSession.id,
+      updates: { isTop: savedMessage.isTop },
+    };
+    this.socketServer?.to(savedMessage.gameSession.id).emit('wall_message_updated', payload);
+    this.socketServer?.to(`host-${savedMessage.gameSession.id}`).emit('wall_message_updated', payload);
+    this.emitToDisplay('wall_message_updated', payload);
+
+    return this.serializeMessage(savedMessage);
   }
 }

@@ -1,7 +1,9 @@
-<!--miniprogram/pages/success/success.wxml-->
-<view class="container">
-  <text class="title">参与成功！</text>
-  <text class="subtitle">您已成功加入赛马游戏！</text>
-  <text class="game-session-id">游戏编号: {{gameSessionId}}</text>
-  <button class="button-primary" bindtap="goToGame">准备开跑！</button>
+<view class="page">
+  <view class="card">
+    <text class="kicker">JOINED</text>
+    <text class="title">报名成功</text>
+    <text class="subtitle">你已经成功进入本场赛马互动，接下来可以先去留言，等待主持人准备开赛。</text>
+    <text class="session-id">场次 ID：{{gameSessionId}}</text>
+    <button class="primary-button" bindtap="goToGame">进入比赛页</button>
+  </view>
 </view>

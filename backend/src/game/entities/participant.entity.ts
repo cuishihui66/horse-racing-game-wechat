@@ -4,7 +4,7 @@ import { User } from '../../auth/entities/user.entity';
 import { GameSession } from './game-session.entity';
 
 @Entity('participants')
-@Index(['gameSession', 'user'], { unique: true }) // A user can only participate once per game session
+@Index(['gameSession', 'user'], { unique: true })
 export class Participant {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -15,10 +15,22 @@ export class Participant {
   @ManyToOne(() => GameSession, gameSession => gameSession.participants, { nullable: false, onDelete: 'CASCADE' })
   gameSession: GameSession;
 
-  @Column({ nullable: true }) // URL to the assigned horse image
+  @Column({ nullable: true })
   horseImageUrl: string;
 
-  @Column({ nullable: true }) // Final rank in the game
+  @Column({ nullable: true })
+  horseStyle: string;
+
+  @Column({ nullable: true })
+  horseColor: string;
+
+  @Column({ nullable: true })
+  horseAccentColor: string;
+
+  @Column({ nullable: true })
+  laneNumber: number;
+
+  @Column({ nullable: true })
   finalRank: number;
 
   @CreateDateColumn({ type: 'timestamptz' })

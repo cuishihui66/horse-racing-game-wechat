@@ -2,5 +2,17 @@
 <view class="container">
   <text class="title">加入赛马游戏</text>
   <text class="subtitle">请扫描大屏幕上的二维码</text>
-  <button class="button-primary" bindtap="scanCode">扫描二维码</button>
+  <button class="button-primary" bindtap="scanCode" loading="{{isJoining}}">扫描二维码</button>
+  <view class="manual-section">
+    <text class="manual-label">本地联调也可直接输入会话 ID</text>
+    <input
+      class="manual-input"
+      placeholder="输入 sessionId 或带 sessionId 的链接"
+      value="{{manualSessionId}}"
+      bindinput="bindManualSessionInput"
+    />
+    <button class="button-secondary" bindtap="submitManualSession" loading="{{isJoining}}">
+      手动加入
+    </button>
+  </view>
 </view>

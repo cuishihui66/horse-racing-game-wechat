@@ -3,64 +3,89 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>赛马摇一摇 - 大屏显示</title>
+    <title>赛马摇一摇 - 大屏舞台</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="game-container">
-        <div class="header">
-            <div class="title-section">
-                <h1 class="game-title">赛马摇一摇</h1>
-                <div class="game-status" id="game-status">等待开始</div>
-            </div>
-            <div class="qr-code-section">
-                <p>扫描二维码加入游戏</p>
-                <div class="qr-code-placeholder">
-                    <!-- QR Code will be generated here -->
-                    <img src="https://via.placeholder.com/150?text=Scan+Me" alt="QR Code" id="qrCodeImage">
-                </div>
-            </div>
-        </div>
+    <div id="screen-shell" class="screen-shell status-waiting">
+        <div class="ambient ambient-left"></div>
+        <div class="ambient ambient-right"></div>
+        <div id="barrage-layer" class="barrage-layer"></div>
 
-        <div class="track-container">
-            <div class="race-track">
-                <div class="start-line">
-                    <div class="start-text">START</div>
-                </div>
-                <div class="finish-line">
-                    <div class="finish-text">FINISH</div>
-                </div>
-                <div class="track-grid">
-                    <!-- Lanes will be dynamically added here -->
-                </div>
-                <div id="horses-container" class="horses-container">
-                    <!-- Horses will be dynamically added here -->
+        <header class="hero-bar">
+            <div>
+                <p class="kicker">HORSE RACING LIVE</p>
+                <h1 id="session-title">等待主持人创建游戏</h1>
+                <div class="hero-meta">
+                    <span id="status-pill" class="status-pill is-waiting">待命</span>
+                    <span id="participant-pill" class="hero-chip">0 位骑手</span>
+                    <span id="tap-pill" class="hero-chip">0 次冲刺</span>
                 </div>
             </div>
+            <div class="hero-stats">
+                <div class="stat-card">
+                    <span class="stat-label">冲线目标</span>
+                    <strong id="finish-limit">TOP 5</strong>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">已到终点</span>
+                    <strong id="finished-count">0</strong>
+                </div>
+            </div>
+        </header>
+
+        <section id="join-stage" class="join-stage">
+            <div class="join-copy">
+                <p class="join-kicker">扫码报名，立刻上马</p>
+                <h2 id="join-stage-title">新一轮互动赛即将开始</h2>
+                <p class="join-description">扫码进入小程序后即可报名、留言，并在倒计时结束后为自己的小马疯狂冲刺。</p>
+                <div id="join-roster" class="join-roster"></div>
+            </div>
+            <div class="join-card">
+                <div class="qr-card">
+                    <img id="qr-code-image" src="" alt="参与二维码">
+                </div>
+                <p class="join-tip">请使用微信扫码参与</p>
+            </div>
+        </section>
+
+        <main class="race-layout">
+            <section class="track-panel">
+                <div class="track-head">
+                    <span>起跑线</span>
+                    <span>终点线</span>
+                </div>
+                <div id="track-lanes" class="track-lanes"></div>
+            </section>
+
+            <aside class="ranking-panel">
+                <div class="panel-title-row">
+                    <p class="panel-kicker">LIVE BOARD</p>
+                    <h2>实时前五</h2>
+                </div>
+                <div id="ranking-list" class="ranking-list"></div>
+            </aside>
+        </main>
+
+        <div id="countdown-overlay" class="countdown-overlay hidden">
+            <div class="countdown-card">
+                <p>比赛即将开始</p>
+                <span id="countdown-number">3</span>
+            </div>
         </div>
 
-        <div id="wall-message-container" class="wall-message-container">
-            <!-- Wall messages will be dynamically added here -->
-        </div>
-
-        <div class="leaderboard">
-            <h2>实时排名</h2>
-            <ul id="realtime-rankings">
-                <!-- Real-time rankings will be displayed here -->
-            </ul>
-        </div>
-
-        <div id="final-rankings-overlay" class="final-rankings-overlay">
-            <div class="final-rankings-content">
-                <h2>🏆 游戏结束！最终排名</h2>
-                <ul id="final-rankings-list">
-                    <!-- Final rankings will be displayed here -->
-                </ul>
-                <button id="reset-game-button" class="reset-button">🔄 重置游戏</button>
+        <div id="finish-overlay" class="finish-overlay hidden">
+            <div class="finish-card">
+                <p class="panel-kicker">RACE RESULT</p>
+                <h2>冠军榜单</h2>
+                <div id="podium-list" class="podium-list"></div>
+                <div id="final-ranking-list" class="final-ranking-list"></div>
             </div>
         </div>
     </div>
 
+    <script src="config.js"></script>
+    <script src="socket.io.min.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

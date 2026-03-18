@@ -1,522 +1,1084 @@
-// backend/src/game/game.service.ts
-import { Injectable, Logger, OnModuleDestroy, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { InjectRedis } from '@nestjs-modules/ioredis';
+import { ConfigService } from '@nestjs/config';
+import { Redis } from 'ioredis';
+import { Server } from 'socket.io';
 import { GameSession, GameSessionStatus } from './entities/game-session.entity';
 import { Participant } from './entities/participant.entity';
 import { User } from '../auth/entities/user.entity';
-import { RedisService } from '@nestjs-modules/ioredis';
-import { nanoid } from 'nanoid'; // yarn add nanoid or npm install nanoid
-import { ConfigService } from '@nestjs/config';
-import { Server } from 'socket.io'; // Import Server for typing
-import { WallMessage } from '../wall/entities/wall-message.entity'; // Import WallMessage for TypeOrmModule
+
+type RuntimeState = {
+  status: GameSessionStatus;
+  trackLength: number;
+  stepDistance: number;
+  countdownEndsAt: number | null;
+  finishLimit: number;
+  finishedCount: number;
+  totalTapCount: number;
+};
+
+type ParticipantState = {
+  participantId: string;
+  userId: string;
+  wechatNickname: string;
+  avatarUrl: string;
+  horseStyle: string;
+  horseColor: string;
+  horseAccentColor: string;
+  horseBadge: string;
+  laneNumber: number;
+  position: number;
+  tapCount: number;
+  finishTime: number | null;
+  finalRank: number | null;
+  isFinished: boolean;
+  joinedAt: string;
+  isBot: boolean;
+};
 
 @Injectable()
 export class GameService implements OnModuleDestroy {
   private readonly logger = new Logger(GameService.name);
-  private gameLoopIntervals: Map<string, NodeJS.Timeout> = new Map(); // Store interval per session
-  private socketServer: Server; // Reference to the Socket.IO server
+  private socketServer?: Server;
+  private readonly countdownTimeouts = new Map<string, NodeJS.Timeout>();
+  private readonly simulationIntervals = new Map<string, NodeJS.Timeout>();
+  private readonly simulationLocks = new Set<string>();
 
-  private readonly GAME_UPDATE_INTERVAL_MS = 50; // 20 updates per second
-  private readonly TRACK_LENGTH = 1000; // Finish line position (arbitrary units)
-  private readonly HORSE_IMAGES = [ // Example horse images - replace with actual assets
-    '/assets/horses/horse_1.png',
-    '/assets/horses/horse_2.png',
-    '/assets/horses/horse_3.png',
-    '/assets/horses/horse_4.png',
-    '/assets/horses/horse_5.png',
+  private readonly TRACK_LENGTH = 100;
+  private readonly STEP_DISTANCE = 4;
+  private readonly DEFAULT_COUNTDOWN_SECONDS = 3;
+  private readonly DEFAULT_TITLE = 'Horse Racing Shake';
+  private readonly BOT_TICK_INTERVAL_MS = 260;
+  private readonly BOT_PREFIXES = ['Spark', 'Nova', 'Dash', 'Pixel', 'Rocket', 'Cocoa', 'Luna', 'Mango'];
+  private readonly BOT_SUFFIXES = ['Rider', 'Pony', 'Sprinter', 'Blink', 'Breeze', 'Flash', 'Comet', 'Wave'];
+  private readonly HORSE_PALETTES = [
+    { style: 'sunburst', color: '#ff7a59', accentColor: '#ffd166', badge: 'A' },
+    { style: 'mint', color: '#25c2a0', accentColor: '#d9fff5', badge: 'B' },
+    { style: 'violet', color: '#7f5cff', accentColor: '#f5d0fe', badge: 'C' },
+    { style: 'skyline', color: '#2bb3ff', accentColor: '#e0f2fe', badge: 'D' },
+    { style: 'berry', color: '#ff4f8b', accentColor: '#fee2e2', badge: 'E' },
+    { style: 'amber', color: '#ffb703', accentColor: '#fff1bf', badge: 'F' },
+    { style: 'jade', color: '#22c55e', accentColor: '#dcfce7', badge: 'G' },
+    { style: 'storm', color: '#475569', accentColor: '#cbd5e1', badge: 'H' },
   ];
 
   constructor(
     @InjectRepository(GameSession)
-    private gameSessionRepository: Repository<GameSession>,
+    private readonly gameSessionRepository: Repository<GameSession>,
     @InjectRepository(Participant)
-    private participantRepository: Repository<Participant>,
+    private readonly participantRepository: Repository<Participant>,
     @InjectRepository(User)
-    private userRepository: Repository<User>,
-    private readonly redisService: RedisService,
+    private readonly userRepository: Repository<User>,
+    @InjectRedis()
+    private readonly redis: Redis,
     private readonly configService: ConfigService,
   ) {}
 
-  /**
-   * Set the Socket.IO server instance. This is needed for GameService to broadcast events.
-   * Called by GameGateway after initialization.
-   */
   setSocketServer(server: Server) {
     this.socketServer = server;
   }
 
-  // --- Game Session Management (Host API via REST Controller) ---
+  private getGameStateRedisKey(sessionId: string) {
+    return `game:${sessionId}:state`;
+  }
 
-  async createGameSession(hostId: string) {
+  private getParticipantRedisKey(sessionId: string) {
+    return `game:${sessionId}:participants`;
+  }
+
+  private buildQrImageUrl(text?: string | null) {
+    if (!text) {
+      return '';
+    }
+
+    return `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(text)}`;
+  }
+
+  private sanitizeTitle(title?: string | null) {
+    const nextTitle = `${title || ''}`.trim();
+    return nextTitle || this.DEFAULT_TITLE;
+  }
+
+  private clampWallOpacity(value: number) {
+    if (Number.isNaN(Number(value))) {
+      return 0.72;
+    }
+
+    return Math.min(1, Math.max(0.15, Number(value)));
+  }
+
+  private getPalette(index: number) {
+    return this.HORSE_PALETTES[index % this.HORSE_PALETTES.length];
+  }
+
+  private ensureDevMode() {
+    if (!this.configService.get<boolean>('devAuthMode')) {
+      throw new ForbiddenException('Dev mode is disabled');
+    }
+  }
+
+  private isBotOpenid(openid?: string | null) {
+    return Boolean(openid && openid.startsWith('dev-bot-'));
+  }
+
+  private createBotProfile(seed: number) {
+    const prefix = this.BOT_PREFIXES[seed % this.BOT_PREFIXES.length];
+    const suffix = this.BOT_SUFFIXES[(seed * 3) % this.BOT_SUFFIXES.length];
+    const nickname = `${prefix} ${suffix}`;
+    const openid = `dev-bot-${Date.now()}-${seed}-${Math.random().toString(36).slice(2, 8)}`;
+    const avatarLabel = encodeURIComponent(prefix.slice(0, 2).toUpperCase());
+
+    return {
+      openid,
+      nickname,
+      avatarUrl: `https://via.placeholder.com/96/15243f/f3f8ff?text=${avatarLabel}`,
+    };
+  }
+
+  private serializeParticipantState(state: ParticipantState) {
+    return {
+      ...state,
+      progressPercent: Math.round((state.position / this.TRACK_LENGTH) * 1000) / 10,
+    };
+  }
+
+  private serializePublicRanking(participant: ParticipantState, fallbackRank: number) {
+    return {
+      userId: participant.userId,
+      participantId: participant.participantId,
+      wechatNickname: participant.wechatNickname,
+      avatarUrl: participant.avatarUrl || '',
+      horseStyle: participant.horseStyle,
+      horseColor: participant.horseColor,
+      horseAccentColor: participant.horseAccentColor,
+      horseBadge: participant.horseBadge,
+      laneNumber: participant.laneNumber,
+      position: participant.position,
+      tapCount: participant.tapCount,
+      finalRank: participant.finalRank,
+      rank: participant.finalRank || fallbackRank,
+      isFinished: participant.isFinished,
+      finishTime: participant.finishTime,
+      isBot: participant.isBot,
+      progressPercent: Math.round((participant.position / this.TRACK_LENGTH) * 1000) / 10,
+    };
+  }
+
+  private async getSessionOrThrow(sessionId: string, relations: string[] = ['host']) {
+    const session = await this.gameSessionRepository.findOne({
+      where: { id: sessionId },
+      relations,
+    });
+
+    if (!session) {
+      throw new NotFoundException('Game session not found');
+    }
+
+    return session;
+  }
+
+  private async assertHostOwnsSession(
+    sessionId: string,
+    hostId: string,
+    relations: string[] = ['host'],
+  ) {
+    const session = await this.getSessionOrThrow(sessionId, relations);
+
+    if (session.host.id !== hostId) {
+      throw new ForbiddenException('Only the host can manage this session');
+    }
+
+    return session;
+  }
+
+  private async ensureRuntimeState(session: GameSession): Promise<RuntimeState> {
+    const key = this.getGameStateRedisKey(session.id);
+    const existing = await this.redis.hgetall(key);
+
+    if (existing.status) {
+      return {
+        status: (existing.status as GameSessionStatus) || session.status,
+        trackLength: Number(existing.trackLength || this.TRACK_LENGTH),
+        stepDistance: Number(existing.stepDistance || this.STEP_DISTANCE),
+        countdownEndsAt: existing.countdownEndsAt ? Number(existing.countdownEndsAt) : null,
+        finishLimit: Number(existing.finishLimit || 0),
+        finishedCount: Number(existing.finishedCount || 0),
+        totalTapCount: Number(existing.totalTapCount || 0),
+      };
+    }
+
+    const seed: RuntimeState = {
+      status: session.status,
+      trackLength: this.TRACK_LENGTH,
+      stepDistance: this.STEP_DISTANCE,
+      countdownEndsAt: null,
+      finishLimit: 0,
+      finishedCount: 0,
+      totalTapCount: 0,
+    };
+
+    await this.redis.hset(key, {
+      status: seed.status,
+      trackLength: String(seed.trackLength),
+      stepDistance: String(seed.stepDistance),
+      countdownEndsAt: '',
+      finishLimit: '0',
+      finishedCount: '0',
+      totalTapCount: '0',
+    });
+
+    return seed;
+  }
+
+  private async persistRuntimeState(sessionId: string, state: Partial<RuntimeState>) {
+    const payload: Record<string, string> = {};
+
+    if (state.status) {
+      payload.status = state.status;
+    }
+    if (state.trackLength !== undefined) {
+      payload.trackLength = String(state.trackLength);
+    }
+    if (state.stepDistance !== undefined) {
+      payload.stepDistance = String(state.stepDistance);
+    }
+    if (state.finishLimit !== undefined) {
+      payload.finishLimit = String(state.finishLimit);
+    }
+    if (state.finishedCount !== undefined) {
+      payload.finishedCount = String(state.finishedCount);
+    }
+    if (state.totalTapCount !== undefined) {
+      payload.totalTapCount = String(state.totalTapCount);
+    }
+    if (state.countdownEndsAt !== undefined) {
+      payload.countdownEndsAt = state.countdownEndsAt ? String(state.countdownEndsAt) : '';
+    }
+
+    if (Object.keys(payload).length > 0) {
+      await this.redis.hset(this.getGameStateRedisKey(sessionId), payload);
+    }
+  }
+
+  private async getParticipantsState(sessionId: string): Promise<ParticipantState[]> {
+    const rawStates = await this.redis.hgetall(this.getParticipantRedisKey(sessionId));
+
+    if (Object.keys(rawStates).length > 0) {
+      return Object.values(rawStates)
+        .map((rawValue) => JSON.parse(rawValue) as ParticipantState)
+        .sort((left, right) => left.laneNumber - right.laneNumber);
+    }
+
+    const participants = await this.participantRepository.find({
+      where: { gameSession: { id: sessionId } },
+      relations: ['user'],
+      order: { laneNumber: 'ASC', joinedAt: 'ASC' },
+    });
+
+    if (participants.length === 0) {
+      return [];
+    }
+
+    const rebuilt: ParticipantState[] = participants.map((participant, index) => {
+      const palette = this.getPalette(index);
+      const isBot = this.isBotOpenid(participant.user?.wechatOpenid);
+
+      return {
+        participantId: participant.id,
+        userId: participant.user.id,
+        wechatNickname: participant.user.wechatNickname || `User ${participant.user.id.slice(0, 4)}`,
+        avatarUrl: participant.user.avatarUrl || '',
+        horseStyle: participant.horseStyle || palette.style,
+        horseColor: participant.horseColor || palette.color,
+        horseAccentColor: participant.horseAccentColor || palette.accentColor,
+        horseBadge: palette.badge,
+        laneNumber: participant.laneNumber || index + 1,
+        position: participant.finalRank ? this.TRACK_LENGTH : 0,
+        tapCount: 0,
+        finishTime: null,
+        finalRank: participant.finalRank ?? null,
+        isFinished: Boolean(participant.finalRank),
+        joinedAt: participant.joinedAt.toISOString(),
+        isBot,
+      };
+    });
+
+    const redisPayload: Record<string, string> = {};
+    rebuilt.forEach((participant) => {
+      redisPayload[participant.userId] = JSON.stringify(participant);
+    });
+
+    await this.redis.hset(this.getParticipantRedisKey(sessionId), redisPayload);
+    return rebuilt;
+  }
+
+  private async saveParticipantState(sessionId: string, participant: ParticipantState) {
+    await this.redis.hset(
+      this.getParticipantRedisKey(sessionId),
+      participant.userId,
+      JSON.stringify(participant),
+    );
+  }
+
+  private async clearCountdownTimer(sessionId: string) {
+    const timeout = this.countdownTimeouts.get(sessionId);
+
+    if (timeout) {
+      clearTimeout(timeout);
+      this.countdownTimeouts.delete(sessionId);
+    }
+  }
+
+  private stopSimulationLoop(sessionId: string) {
+    const interval = this.simulationIntervals.get(sessionId);
+
+    if (interval) {
+      clearInterval(interval);
+      this.simulationIntervals.delete(sessionId);
+    }
+
+    this.simulationLocks.delete(sessionId);
+  }
+
+  private emitToDisplay(eventName: string, payload: unknown) {
+    this.socketServer?.to('display-global').emit(eventName, payload);
+  }
+
+  private async broadcastSessionState(sessionId: string, eventName = 'game_state_update') {
+    const state = await this.getGameSessionState(sessionId);
+    this.socketServer?.to(sessionId).emit(eventName, state);
+    this.emitToDisplay(eventName, state);
+    return state;
+  }
+
+  private async runSimulationTick(sessionId: string) {
+    if (this.simulationLocks.has(sessionId)) {
+      return;
+    }
+
+    this.simulationLocks.add(sessionId);
+
+    try {
+      const session = await this.getSessionOrThrow(sessionId, ['host']);
+      const runtimeState = await this.ensureRuntimeState(session);
+
+      if (
+        runtimeState.status === GameSessionStatus.FINISHED ||
+        runtimeState.status === GameSessionStatus.QR_SCANNING
+      ) {
+        return;
+      }
+
+      if (runtimeState.status !== GameSessionStatus.PLAYING) {
+        return;
+      }
+
+      const participants = await this.getParticipantsState(sessionId);
+      const activeBots = participants.filter((participant) => participant.isBot && !participant.isFinished);
+
+      if (activeBots.length === 0) {
+        this.stopSimulationLoop(sessionId);
+        return;
+      }
+
+      for (const participant of activeBots) {
+        const boostChance = 0.35 + ((participant.laneNumber % 4) * 0.12);
+        if (Math.random() > boostChance) {
+          continue;
+        }
+
+        const burst = Math.random() > 0.72 ? 2 : 1;
+        for (let index = 0; index < burst; index += 1) {
+          await this.handleAccelerate(sessionId, participant.userId);
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(`Bot simulation tick failed for ${sessionId}: ${message}`, stack);
+    } finally {
+      this.simulationLocks.delete(sessionId);
+    }
+  }
+
+  async getCurrentDisplaySessionState() {
+    const [session] = await this.gameSessionRepository.find({
+      order: { updatedAt: 'DESC' },
+      relations: ['host'],
+      take: 1,
+    });
+
+    if (!session) {
+      return null;
+    }
+
+    return this.getGameSessionState(session.id);
+  }
+
+  async createGameSession(hostId: string, title?: string) {
     const host = await this.userRepository.findOne({ where: { id: hostId } });
+
     if (!host) {
       throw new NotFoundException('Host user not found');
     }
 
-    const gameSession = this.gameSessionRepository.create({
+    const session = this.gameSessionRepository.create({
       host,
-      status: GameSessionStatus.WAITING,
+      title: this.sanitizeTitle(title),
+      status: GameSessionStatus.QR_SCANNING,
+      wallOpacity: 0.72,
+      countdownSeconds: this.DEFAULT_COUNTDOWN_SECONDS,
     });
-    await this.gameSessionRepository.save(gameSession);
 
-    // Generate QR code URL
-    const miniprogramBaseUrl = this.configService.get<string>('miniprogramUrl');
-    const qrCodeUrl = `${miniprogramBaseUrl}${gameSession.id}`;
-    gameSession.qrCodeUrl = qrCodeUrl;
-    await this.gameSessionRepository.save(gameSession);
+    await this.gameSessionRepository.save(session);
+    session.qrCodeUrl = `${this.configService.get<string>('miniprogramUrl')}${session.id}`;
+    session.wallQrCodeUrl = `${this.configService.get<string>('wallMiniprogramUrl')}${session.id}`;
+    await this.gameSessionRepository.save(session);
 
-    // Store initial game state in Redis
-    await this.redisService.hset(`game_state:${gameSession.id}`,
-      'status', GameSessionStatus.WAITING,
-      'qrScanEndTime', '0',
-      'hostSocketId', '', // To be set when host connects via WS
-      'trackLength', this.TRACK_LENGTH.toString(),
-      'startTime', '0',
-      'endTime', '0'
-    );
-
-    this.logger.log(`Game session created: ${gameSession.id} by host ${hostId}`);
-    return { gameSessionId: gameSession.id, qrCodeUrl };
-  }
-
-  async startGameScanPhase(gameSessionId: string, durationSeconds: number) {
-    const gameSession = await this.gameSessionRepository.findOne({ where: { id: gameSessionId } });
-    if (!gameSession) {
-      throw new NotFoundException('Game session not found');
-    }
-    if (gameSession.status !== GameSessionStatus.WAITING && gameSession.status !== GameSessionStatus.READY_TO_START) {
-      throw new BadRequestException('Game is not in waiting or ready_to_start status to start QR scan');
-    }
-
-    const qrScanEndTime = Date.now() + durationSeconds * 1000;
-    await this.redisService.hset(`game_state:${gameSession.id}`,
-      'status', GameSessionStatus.QR_SCANNING,
-      'qrScanEndTime', qrScanEndTime.toString()
-    );
-    gameSession.status = GameSessionStatus.QR_SCANNING;
-    await this.gameSessionRepository.save(gameSession);
-
-    // Notify large screen clients
-    this.socketServer?.to(gameSessionId).emit('qr_scan_started', {
-      sessionId: gameSessionId,
-      qrScanEndTime,
-      status: GameSessionStatus.QR_SCANNING
+    await this.persistRuntimeState(session.id, {
+      status: GameSessionStatus.QR_SCANNING,
+      trackLength: this.TRACK_LENGTH,
+      stepDistance: this.STEP_DISTANCE,
+      countdownEndsAt: null,
+      finishLimit: 0,
+      finishedCount: 0,
+      totalTapCount: 0,
     });
-    this.logger.log(`Game session ${gameSessionId} QR scan phase started, ends at ${new Date(qrScanEndTime).toISOString()}`);
 
-    // Schedule auto-end of QR scan phase
-    setTimeout(() => this.endGameScanPhase(gameSessionId), durationSeconds * 1000);
-    return { status: GameSessionStatus.QR_SCANNING, qrScanEndTime };
+    this.logger.log(`Game session created: ${session.id}`);
+    return this.broadcastSessionState(session.id, 'game_state_init');
   }
 
-  async endGameScanPhase(gameSessionId: string) {
-    const gameSession = await this.gameSessionRepository.findOne({ where: { id: gameSessionId } });
-    if (!gameSession) {
-      this.logger.warn(`Game session ${gameSessionId} not found during end scan phase.`);
-      return;
-    }
-
-    const currentStatus = await this.redisService.hget(`game_state:${gameSession.id}`, 'status') as GameSessionStatus;
-
-    if (currentStatus === GameSessionStatus.QR_SCANNING) {
-      await this.redisService.hset(`game_state:${gameSession.id}`, 'status', GameSessionStatus.READY_TO_START);
-      gameSession.status = GameSessionStatus.READY_TO_START;
-      await this.gameSessionRepository.save(gameSession);
-
-      this.socketServer?.to(gameSessionId).emit('qr_scan_ended', {
-        sessionId: gameSessionId,
-        status: GameSessionStatus.READY_TO_START
-      });
-      this.logger.log(`Game session ${gameSessionId} QR scan phase ended.`);
-    }
-  }
-
-  async startGame(gameSessionId: string) {
-    const gameSession = await this.gameSessionRepository.findOne({ where: { id: gameSessionId } });
-    if (!gameSession) {
-      throw new NotFoundException('Game session not found');
-    }
-
-    const currentStatus = await this.redisService.hget(`game_state:${gameSession.id}`, 'status') as GameSessionStatus;
-    if (currentStatus !== GameSessionStatus.READY_TO_START) {
-      throw new BadRequestException('Game is not in ready_to_start status. Ensure QR scan is finished and participants have joined.');
-    }
-
-    // Check if there are participants
-    const participantCount = await this.redisService.hlen(`game_participants:${gameSession.id}`);
-    if (participantCount === 0) {
-      throw new BadRequestException('Cannot start game without participants.');
-    }
-
-    await this.redisService.hset(`game_state:${gameSession.id}`,
-      'status', GameSessionStatus.PLAYING,
-      'startTime', Date.now().toString()
-    );
-    gameSession.status = GameSessionStatus.PLAYING;
-    gameSession.startTime = new Date();
-    await this.gameSessionRepository.save(gameSession);
-
-    // Start game loop for this session
-    if (!this.gameLoopIntervals.has(gameSessionId)) {
-      const interval = setInterval(() => this.gameLoop(gameSessionId), this.GAME_UPDATE_INTERVAL_MS);
-      this.gameLoopIntervals.set(gameSessionId, interval);
-      this.logger.log(`Game loop started for session ${gameSessionId}`);
-    } else {
-      this.logger.warn(`Game loop for session ${gameSessionId} was already running.`);
-    }
-
-    this.socketServer?.to(gameSessionId).emit('game_started', {
-      sessionId: gameSessionId,
-      status: GameSessionStatus.PLAYING,
-      startTime: gameSession.startTime.toISOString()
+  async listSessionsForHost(hostId: string) {
+    const sessions = await this.gameSessionRepository.find({
+      where: { host: { id: hostId } },
+      relations: ['participants', 'participants.user'],
+      order: { createdAt: 'DESC' },
     });
-    this.logger.log(`Game session ${gameSessionId} started.`);
-    return { status: GameSessionStatus.PLAYING };
+
+    return sessions.map((session) => {
+      const podium = (session.participants || [])
+        .filter((participant) => participant.finalRank && participant.finalRank <= 3)
+        .sort((left, right) => (left.finalRank || 999) - (right.finalRank || 999))
+        .map((participant) => ({
+          rank: participant.finalRank,
+          userId: participant.user.id,
+          wechatNickname: participant.user.wechatNickname || `User ${participant.user.id.slice(0, 4)}`,
+          avatarUrl: participant.user.avatarUrl || '',
+        }));
+
+      return {
+        id: session.id,
+        title: session.title,
+        status: session.status,
+        participantCount: session.participants?.length ?? 0,
+        wallOpacity: session.wallOpacity,
+        qrCodeUrl: session.qrCodeUrl,
+        wallQrCodeUrl: session.wallQrCodeUrl,
+        qrCodeImageUrl: this.buildQrImageUrl(session.qrCodeUrl),
+        wallQrCodeImageUrl: this.buildQrImageUrl(session.wallQrCodeUrl),
+        createdAt: session.createdAt,
+        updatedAt: session.updatedAt,
+        endTime: session.endTime,
+        podium,
+      };
+    });
   }
 
-  async resetGame(gameSessionId: string) {
-    const gameSession = await this.gameSessionRepository.findOne({ where: { id: gameSessionId } });
-    if (!gameSession) {
-      throw new NotFoundException('Game session not found');
+  async startGameScanPhase(sessionId: string, hostId: string) {
+    const session = await this.assertHostOwnsSession(sessionId, hostId, ['host']);
+    await this.clearCountdownTimer(sessionId);
+    this.stopSimulationLoop(sessionId);
+
+    session.status = GameSessionStatus.QR_SCANNING;
+    await this.gameSessionRepository.save(session);
+
+    await this.persistRuntimeState(sessionId, {
+      status: GameSessionStatus.QR_SCANNING,
+      countdownEndsAt: null,
+      finishedCount: 0,
+    });
+
+    this.socketServer?.to(sessionId).emit('qr_scan_started', {
+      sessionId,
+      status: GameSessionStatus.QR_SCANNING,
+    });
+
+    return this.broadcastSessionState(sessionId);
+  }
+
+  async prepareGame(sessionId: string, hostId: string) {
+    const session = await this.assertHostOwnsSession(sessionId, hostId, ['host']);
+    const participants = await this.getParticipantsState(sessionId);
+
+    if (participants.length === 0) {
+      throw new BadRequestException('At least one participant is required');
     }
 
-    // Stop game loop if running
-    if (this.gameLoopIntervals.has(gameSessionId)) {
-      clearInterval(this.gameLoopIntervals.get(gameSessionId));
-      this.gameLoopIntervals.delete(gameSessionId);
-      this.logger.log(`Game loop stopped for session ${gameSessionId}`);
+    session.status = GameSessionStatus.READY_TO_START;
+    await this.gameSessionRepository.save(session);
+
+    await this.persistRuntimeState(sessionId, {
+      status: GameSessionStatus.READY_TO_START,
+      countdownEndsAt: null,
+      finishLimit: Math.min(5, participants.length),
+      finishedCount: participants.filter((participant) => participant.isFinished).length,
+    });
+
+    this.socketServer?.to(sessionId).emit('game_prepared', {
+      sessionId,
+      status: GameSessionStatus.READY_TO_START,
+    });
+
+    return this.broadcastSessionState(sessionId);
+  }
+
+  async endGameScanPhase(sessionId: string, hostId?: string) {
+    if (!hostId) {
+      const session = await this.getSessionOrThrow(sessionId, ['host']);
+      return this.prepareGame(sessionId, session.host.id);
     }
 
-    // Reset Redis state for participants
-    const participantKeys = await this.redisService.hkeys(`game_participants:${gameSession.id}`);
-    for (const userId of participantKeys) {
-      const participantData = JSON.parse(await this.redisService.hget(`game_participants:${gameSession.id}`, userId));
-      await this.redisService.hset(`game_participants:${gameSession.id}`, userId, JSON.stringify({
-        ...participantData, // Keep static info like nickname, horse image
-        position: 0,
-        speed: 0,
-        lastTapTime: 0,
-        tapCount: 0,
-        finishTime: 0,
-      }));
-    }
-    await this.redisService.del(`game_ranking:${gameSession.id}`); // Clear rankings
+    return this.prepareGame(sessionId, hostId);
+  }
 
-    await this.redisService.hset(`game_state:${gameSession.id}`,
-      'status', GameSessionStatus.WAITING,
-      'startTime', '0',
-      'endTime', '0',
-      'qrScanEndTime', '0'
+  async updateWallSettings(sessionId: string, hostId: string, wallOpacity: number) {
+    const session = await this.assertHostOwnsSession(sessionId, hostId, ['host']);
+    session.wallOpacity = this.clampWallOpacity(wallOpacity);
+    await this.gameSessionRepository.save(session);
+    return this.broadcastSessionState(sessionId);
+  }
+
+  async startGame(sessionId: string, hostId: string) {
+    const session = await this.assertHostOwnsSession(sessionId, hostId, ['host']);
+    const runtimeState = await this.ensureRuntimeState(session);
+    const participants = await this.getParticipantsState(sessionId);
+
+    if (runtimeState.status !== GameSessionStatus.READY_TO_START) {
+      throw new BadRequestException('The session is not ready to start');
+    }
+
+    if (participants.length === 0) {
+      throw new BadRequestException('No participants joined this session');
+    }
+
+    await this.clearCountdownTimer(sessionId);
+    const countdownSeconds = session.countdownSeconds || this.DEFAULT_COUNTDOWN_SECONDS;
+    const countdownEndsAt = Date.now() + countdownSeconds * 1000;
+
+    session.status = GameSessionStatus.COUNTDOWN;
+    await this.gameSessionRepository.save(session);
+
+    await this.persistRuntimeState(sessionId, {
+      status: GameSessionStatus.COUNTDOWN,
+      countdownEndsAt,
+      finishLimit: Math.min(5, participants.length),
+      finishedCount: 0,
+      totalTapCount: 0,
+    });
+
+    this.socketServer?.to(sessionId).emit('countdown_started', {
+      sessionId,
+      status: GameSessionStatus.COUNTDOWN,
+      countdownSeconds,
+      countdownEndsAt,
+    });
+
+    await this.broadcastSessionState(sessionId);
+
+    this.countdownTimeouts.set(
+      sessionId,
+      setTimeout(() => {
+        this.launchRace(sessionId).catch((error) => {
+          const message = error instanceof Error ? error.message : String(error);
+          const stack = error instanceof Error ? error.stack : undefined;
+          this.logger.error(`Countdown launch failed for ${sessionId}: ${message}`, stack);
+        });
+      }, countdownSeconds * 1000),
     );
-    gameSession.status = GameSessionStatus.WAITING;
-    gameSession.startTime = null;
-    gameSession.endTime = null;
-    await this.gameSessionRepository.save(gameSession);
-
-    // Also reset final ranks in PostgreSQL
-    await this.participantRepository.update({ gameSession: { id: gameSessionId } }, { finalRank: null });
-
-
-    this.socketServer?.to(gameSessionId).emit('game_reset', { sessionId: gameSessionId, status: GameSessionStatus.WAITING });
-    this.logger.log(`Game session ${gameSessionId} reset.`);
-    return { status: GameSessionStatus.WAITING };
-  }
-
-  async getGameSessionState(gameSessionId: string) {
-    const gameSession = await this.gameSessionRepository.findOne({ where: { id: gameSessionId }, relations: ['host'] });
-    if (!gameSession) {
-      throw new NotFoundException('Game session not found');
-    }
-    const redisGameState = await this.redisService.hgetall(`game_state:${gameSessionId}`);
-    const participantsData = await this.redisService.hgetall(`game_participants:${gameSessionId}`);
-    const participantsList = Object.entries(participantsData).map(([userId, data]) => ({ userId, ...JSON.parse(data) }));
-
-    const currentRankings = await this.getRealtimeRankings(gameSessionId);
 
     return {
-      ...gameSession,
-      redisState: redisGameState,
-      participants: participantsList,
-      currentRankings,
+      sessionId,
+      status: GameSessionStatus.COUNTDOWN,
+      countdownSeconds,
+      countdownEndsAt,
     };
   }
 
-  // --- Game Participation (Mini-Program API via REST Controller) ---
-  async joinGame(gameSessionId: string, userId: string, wechatNickname: string, avatarUrl?: string) {
-    const gameSession = await this.gameSessionRepository.findOne({ where: { id: gameSessionId } });
-    if (!gameSession) {
-      throw new NotFoundException('Game session not found');
+  private async launchRace(sessionId: string) {
+    const session = await this.getSessionOrThrow(sessionId, ['host']);
+    const runtimeState = await this.ensureRuntimeState(session);
+
+    if (runtimeState.status !== GameSessionStatus.COUNTDOWN) {
+      return;
     }
 
-    const currentStatus = await this.redisService.hget(`game_state:${gameSessionId}`, 'status') as GameSessionStatus;
-    if (currentStatus !== GameSessionStatus.WAITING && currentStatus !== GameSessionStatus.QR_SCANNING) {
-      throw new BadRequestException('Game is not open for joining.');
+    await this.clearCountdownTimer(sessionId);
+    session.status = GameSessionStatus.PLAYING;
+    session.startTime = new Date();
+    session.endTime = null;
+    await this.gameSessionRepository.save(session);
+
+    await this.persistRuntimeState(sessionId, {
+      status: GameSessionStatus.PLAYING,
+      countdownEndsAt: null,
+    });
+
+    this.socketServer?.to(sessionId).emit('game_started', {
+      sessionId,
+      status: GameSessionStatus.PLAYING,
+      startTime: session.startTime.toISOString(),
+    });
+
+    await this.broadcastSessionState(sessionId);
+  }
+
+  async resetGame(sessionId: string, hostId: string) {
+    const session = await this.assertHostOwnsSession(sessionId, hostId, ['host']);
+    await this.clearCountdownTimer(sessionId);
+    this.stopSimulationLoop(sessionId);
+
+    const participants = await this.getParticipantsState(sessionId);
+    for (const participant of participants) {
+      participant.position = 0;
+      participant.tapCount = 0;
+      participant.finishTime = null;
+      participant.finalRank = null;
+      participant.isFinished = false;
+      await this.saveParticipantState(sessionId, participant);
     }
 
-    let user = await this.userRepository.findOne({ where: { id: userId } });
+    const allParticipants = await this.participantRepository.find({
+      where: { gameSession: { id: sessionId } },
+    });
+
+    for (const participant of allParticipants) {
+      participant.finalRank = null;
+      await this.participantRepository.save(participant);
+    }
+
+    session.status = GameSessionStatus.QR_SCANNING;
+    session.startTime = null;
+    session.endTime = null;
+    await this.gameSessionRepository.save(session);
+
+    await this.persistRuntimeState(sessionId, {
+      status: GameSessionStatus.QR_SCANNING,
+      countdownEndsAt: null,
+      finishedCount: 0,
+      finishLimit: Math.min(5, participants.length),
+      totalTapCount: 0,
+    });
+
+    this.socketServer?.to(sessionId).emit('game_reset', {
+      sessionId,
+      status: GameSessionStatus.QR_SCANNING,
+    });
+
+    return this.broadcastSessionState(sessionId);
+  }
+
+  async getGameSessionState(sessionId: string) {
+    const session = await this.getSessionOrThrow(sessionId, ['host', 'participants', 'participants.user']);
+    const runtimeState = await this.ensureRuntimeState(session);
+    const participants = await this.getParticipantsState(sessionId);
+    const currentRankings = await this.getRealtimeRankings(sessionId, 5);
+    const finalRankings =
+      runtimeState.status === GameSessionStatus.FINISHED ? await this.getFinalRankings(sessionId) : [];
+
+    return {
+      id: session.id,
+      title: session.title,
+      status: runtimeState.status,
+      startTime: session.startTime,
+      endTime: session.endTime,
+      qrCodeUrl: session.qrCodeUrl,
+      wallQrCodeUrl: session.wallQrCodeUrl,
+      qrCodeImageUrl: this.buildQrImageUrl(session.qrCodeUrl),
+      wallQrCodeImageUrl: this.buildQrImageUrl(session.wallQrCodeUrl),
+      participantCount: participants.length,
+      wallOpacity: session.wallOpacity,
+      countdownSeconds: session.countdownSeconds,
+      countdownEndsAt: runtimeState.countdownEndsAt,
+      trackLength: runtimeState.trackLength,
+      stepDistance: runtimeState.stepDistance,
+      finishLimit: runtimeState.finishLimit || Math.min(5, participants.length),
+      finishedCount: runtimeState.finishedCount,
+      totalTapCount: runtimeState.totalTapCount,
+      simulationActive: this.simulationIntervals.has(sessionId),
+      participants: participants.map((participant) => this.serializeParticipantState(participant)),
+      currentRankings,
+      finalRankings,
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt,
+    };
+  }
+
+  async joinGame(sessionId: string, userId: string, wechatNickname: string, avatarUrl?: string) {
+    const session = await this.getSessionOrThrow(sessionId, ['host']);
+    const runtimeState = await this.ensureRuntimeState(session);
+
+    if (runtimeState.status !== GameSessionStatus.QR_SCANNING) {
+      throw new BadRequestException('The session is not accepting joins');
+    }
+
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+
     if (!user) {
-        user = this.userRepository.create({ id: userId, wechatOpenid: nanoid(), wechatNickname, avatarUrl }); // Mock openid if needed, or use actual
-        await this.userRepository.save(user);
-    } else {
-        // Update nickname/avatar if provided
-        user.wechatNickname = wechatNickname || user.wechatNickname;
-        user.avatarUrl = avatarUrl || user.avatarUrl;
-        await this.userRepository.save(user);
+      throw new NotFoundException('User not found');
     }
+
+    user.wechatNickname = wechatNickname || user.wechatNickname;
+    user.avatarUrl = avatarUrl || user.avatarUrl;
+    await this.userRepository.save(user);
 
     let participant = await this.participantRepository.findOne({
-      where: { gameSession: { id: gameSessionId }, user: { id: userId } }
+      where: { gameSession: { id: sessionId }, user: { id: userId } },
+      relations: ['user'],
     });
 
     if (!participant) {
-      const assignedHorseIndex = await this.redisService.scard(`assigned_horses:${gameSessionId}`) % this.HORSE_IMAGES.length;
-      const horseImageUrl = this.HORSE_IMAGES[assignedHorseIndex];
-
-      participant = this.participantRepository.create({ gameSession, user, horseImageUrl });
-      await this.participantRepository.save(participant);
-
-      // Add to Redis game participants hash
-      await this.redisService.hset(`game_participants:${gameSession.id}`, userId, JSON.stringify({
-        wechatNickname: user.wechatNickname,
-        horseImageUrl,
-        position: 0,
-        speed: 0,
-        lastTapTime: 0,
-        tapCount: 0,
-        finishTime: 0,
-        isFinished: false,
-      }));
-
-      this.socketServer?.to(gameSessionId).emit('participant_joined', {
-        sessionId: gameSessionId,
-        userId: user.id,
-        wechatNickname: user.wechatNickname,
-        horseImageUrl,
-        initialPosition: 0,
+      const existingCount = await this.participantRepository.count({
+        where: { gameSession: { id: sessionId } },
       });
-      this.logger.log(`User ${user.id} joined session ${gameSessionId}`);
-    } else {
-        this.logger.log(`User ${user.id} re-joined session ${gameSessionId}`);
+      const palette = this.getPalette(existingCount);
+
+      participant = this.participantRepository.create({
+        gameSession: session,
+        user,
+        horseImageUrl: '',
+        horseColor: palette.color,
+        horseAccentColor: palette.accentColor,
+        horseStyle: palette.style,
+        laneNumber: existingCount + 1,
+      });
+
+      participant = await this.participantRepository.save(participant);
     }
+
+    const palette = this.getPalette((participant.laneNumber || 1) - 1);
+    const state: ParticipantState = {
+      participantId: participant.id,
+      userId: user.id,
+      wechatNickname: user.wechatNickname || `User ${user.id.slice(0, 4)}`,
+      avatarUrl: user.avatarUrl || '',
+      horseStyle: participant.horseStyle || palette.style,
+      horseColor: participant.horseColor || palette.color,
+      horseAccentColor: participant.horseAccentColor || palette.accentColor,
+      horseBadge: palette.badge,
+      laneNumber: participant.laneNumber || 1,
+      position: 0,
+      tapCount: 0,
+      finishTime: null,
+      finalRank: null,
+      isFinished: false,
+      joinedAt: participant.joinedAt.toISOString(),
+      isBot: this.isBotOpenid(user.wechatOpenid),
+    };
+
+    await this.saveParticipantState(sessionId, state);
+    await this.persistRuntimeState(sessionId, {
+      finishLimit: Math.min(5, (await this.getParticipantsState(sessionId)).length),
+    });
+
+    this.socketServer?.to(sessionId).emit('participant_joined', {
+      sessionId,
+      participant: this.serializeParticipantState(state),
+    });
+
+    await this.broadcastSessionState(sessionId);
 
     return {
       participantId: participant.id,
-      horseImageUrl: participant.horseImageUrl,
-      gameSessionStatus: currentStatus,
+      gameSessionId: sessionId,
+      gameSessionStatus: runtimeState.status,
+      participant: this.serializeParticipantState(state),
     };
   }
 
-  // --- Real-time Game Logic (Game Loop) ---
-  private async gameLoop(gameSessionId: string) {
-    try {
-      const gameState = await this.redisService.hgetall(`game_state:${gameSessionId}`);
-      if (gameState.status !== GameSessionStatus.PLAYING) {
-        this.logger.warn(`Game loop running for session ${gameSessionId} but status is ${gameState.status}. Stopping loop.`);
-        clearInterval(this.gameLoopIntervals.get(gameSessionId));
-        this.gameLoopIntervals.delete(gameSessionId);
-        return;
-      }
+  async createFakeParticipants(sessionId: string, hostId: string, count = 6) {
+    this.ensureDevMode();
+    await this.assertHostOwnsSession(sessionId, hostId, ['host']);
 
-      const participantsData = await this.redisService.hgetall(`game_participants:${gameSessionId}`);
-      const trackLength = parseInt(gameState.trackLength, 10);
-      const now = Date.now();
-      const updates: { userId: string; position: number; speed: number; }[] = [];
-      let raceFinishedBySomeone = false;
+    const safeCount = Math.min(30, Math.max(1, Number(count) || 1));
+    const createdParticipants = [];
 
-      // Filter out participants who have already finished
-      const activeParticipants = Object.entries(participantsData).filter(([, data]) => {
-          const p = JSON.parse(data as string);
-          return !p.isFinished;
+    for (let index = 0; index < safeCount; index += 1) {
+      const profile = this.createBotProfile(index);
+      const user = this.userRepository.create({
+        wechatOpenid: profile.openid,
+        wechatNickname: profile.nickname,
+        avatarUrl: profile.avatarUrl,
       });
 
-      for (const [userId, rawParticipantData] of activeParticipants) {
-        const participant = JSON.parse(rawParticipantData as string);
-
-        // Decay speed if no recent taps
-        const timeSinceLastTap = now - participant.lastTapTime;
-        if (timeSinceLastTap > 200) { // If no tap for 200ms
-          participant.speed = Math.max(0, participant.speed * 0.95 - 0.1); // Gradual decay
-        }
-
-        // Update position
-        participant.position += participant.speed * (this.GAME_UPDATE_INTERVAL_MS / 1000); // Speed is units per second (pixels/s)
-        participant.position = Math.min(participant.position, trackLength);
-
-        if (participant.position >= trackLength && !participant.isFinished) {
-          participant.finishTime = now; // Record finish time
-          participant.isFinished = true;
-          await this.redisService.zadd(`game_ranking:${gameSessionId}`, participant.finishTime, userId);
-          raceFinishedBySomeone = true;
-          this.logger.log(`Participant ${participant.wechatNickname} finished race in session ${gameSessionId}`);
-        }
-        updates.push({ userId, position: participant.position, speed: participant.speed });
-        await this.redisService.hset(`game_participants:${gameSessionId}`, userId, JSON.stringify(participant));
-      }
-
-      if (updates.length > 0) {
-        // Broadcast updates to large screen and mini-program clients
-        this.socketServer?.to(gameSessionId).emit('horse_position_update', {
-          sessionId: gameSessionId,
-          updates,
-          timestamp: now,
-          // Maybe include current top N rankings here directly for client
-          currentTopRankings: await this.getRealtimeRankings(gameSessionId),
-        });
-      }
-
-
-      // Check if all participants finished, or if raceFinishedBySomeone should end the game
-      // Current logic: game ends when the first horse crosses
-      if (raceFinishedBySomeone) {
-        await this.endGame(gameSessionId);
-      }
-    } catch (error) {
-      this.logger.error(`Error in game loop for session ${gameSessionId}:`, error.stack);
-      // Attempt to stop the loop to prevent repeated errors
-      if (this.gameLoopIntervals.has(gameSessionId)) {
-        clearInterval(this.gameLoopIntervals.get(gameSessionId));
-        this.gameLoopIntervals.delete(gameSessionId);
-      }
+      const savedUser = await this.userRepository.save(user);
+      const joined = await this.joinGame(sessionId, savedUser.id, profile.nickname, profile.avatarUrl);
+      createdParticipants.push(joined.participant);
     }
+
+    return {
+      sessionId,
+      createdCount: createdParticipants.length,
+      participants: createdParticipants,
+    };
   }
 
-  async handleAccelerate(gameSessionId: string, userId: string) {
-    const gameState = await this.redisService.hgetall(`game_state:${gameSessionId}`);
-    if (gameState.status !== GameSessionStatus.PLAYING) {
-      this.logger.warn(`Acceleration for session ${gameSessionId} not allowed, status: ${gameState.status}`);
-      return;
+  async startBotSimulation(sessionId: string, hostId: string) {
+    this.ensureDevMode();
+    await this.assertHostOwnsSession(sessionId, hostId, ['host']);
+
+    const participants = await this.getParticipantsState(sessionId);
+    const botCount = participants.filter((participant) => participant.isBot).length;
+
+    if (botCount === 0) {
+      throw new BadRequestException('No fake users found in this session');
     }
 
-    const participantData = await this.redisService.hget(`game_participants:${gameSessionId}`, userId);
-    if (!participantData) {
-      this.logger.warn(`Participant ${userId} not found in session ${gameSessionId}`);
-      return;
+    this.stopSimulationLoop(sessionId);
+    const interval = setInterval(() => {
+      void this.runSimulationTick(sessionId);
+    }, this.BOT_TICK_INTERVAL_MS);
+    this.simulationIntervals.set(sessionId, interval);
+
+    return {
+      sessionId,
+      active: true,
+      botCount,
+      tickIntervalMs: this.BOT_TICK_INTERVAL_MS,
+    };
+  }
+
+  async stopBotSimulation(sessionId: string, hostId: string) {
+    this.ensureDevMode();
+    await this.assertHostOwnsSession(sessionId, hostId, ['host']);
+    this.stopSimulationLoop(sessionId);
+
+    return {
+      sessionId,
+      active: false,
+    };
+  }
+
+  async handleAccelerate(sessionId: string, userId: string) {
+    const session = await this.getSessionOrThrow(sessionId, ['host']);
+    const runtimeState = await this.ensureRuntimeState(session);
+
+    if (runtimeState.status !== GameSessionStatus.PLAYING) {
+      return { accepted: false, reason: 'GAME_NOT_PLAYING' };
     }
 
-    const participant = JSON.parse(participantData);
+    const rawParticipant = await this.redis.hget(this.getParticipantRedisKey(sessionId), userId);
+    if (!rawParticipant) {
+      throw new NotFoundException('Participant not found');
+    }
+
+    const participant = JSON.parse(rawParticipant) as ParticipantState;
     if (participant.isFinished) {
-      this.logger.log(`Participant ${participant.wechatNickname} already finished. Ignoring accelerate event.`);
-      return;
+      return { accepted: false, reason: 'PARTICIPANT_FINISHED' };
     }
 
-    // Increase speed and update last tap time
-    participant.speed = Math.min(participant.speed + 5, 200); // Cap max speed (arbitrary units/s)
-    participant.lastTapTime = Date.now();
-    participant.tapCount++;
+    participant.tapCount += 1;
+    participant.position = Math.min(runtimeState.trackLength, participant.position + runtimeState.stepDistance);
 
-    await this.redisService.hset(`game_participants:${gameSessionId}`, userId, JSON.stringify(participant));
-    // Optionally emit individual feedback to mini-program
-    this.socketServer?.to(this.getUserSocketId(userId, gameSessionId)).emit('your_speed_update', { speed: participant.speed, currentPosition: participant.position });
+    let finishedCount = runtimeState.finishedCount;
+    if (participant.position >= runtimeState.trackLength && !participant.isFinished) {
+      finishedCount = await this.redis.hincrby(this.getGameStateRedisKey(sessionId), 'finishedCount', 1);
+      participant.isFinished = true;
+      participant.finishTime = Date.now();
+      participant.finalRank = finishedCount;
+
+      const participantRecord = await this.participantRepository.findOne({
+        where: { id: participant.participantId },
+      });
+
+      if (participantRecord) {
+        participantRecord.finalRank = participant.finalRank;
+        await this.participantRepository.save(participantRecord);
+      }
+    }
+
+    const totalTapCount = await this.redis.hincrby(this.getGameStateRedisKey(sessionId), 'totalTapCount', 1);
+    await this.saveParticipantState(sessionId, participant);
+    const allParticipants = await this.getParticipantsState(sessionId);
+    const finishLimit = runtimeState.finishLimit || Math.min(5, allParticipants.length);
+    const currentTopRankings = await this.getRealtimeRankings(sessionId, 5);
+
+    const payload = {
+      sessionId,
+      participant: this.serializeParticipantState(participant),
+      currentTopRankings,
+      finishedCount,
+      finishLimit,
+      totalTapCount,
+    };
+
+    this.socketServer?.to(sessionId).emit('horse_position_update', payload);
+    this.emitToDisplay('horse_position_update', payload);
+
+    if (participant.isFinished) {
+      const finishPayload = {
+        sessionId,
+        participant: this.serializeParticipantState(participant),
+      };
+
+      this.socketServer?.to(sessionId).emit('participant_finished', finishPayload);
+      this.emitToDisplay('participant_finished', finishPayload);
+    }
+
+    if (finishedCount >= finishLimit) {
+      await this.endGame(sessionId);
+    }
+
+    return {
+      accepted: true,
+      tapCount: participant.tapCount,
+      currentPosition: participant.position,
+      isFinished: participant.isFinished,
+      finalRank: participant.finalRank,
+    };
   }
 
-  async endGame(gameSessionId: string) {
-    // Stop game loop
-    if (this.gameLoopIntervals.has(gameSessionId)) {
-      clearInterval(this.gameLoopIntervals.get(gameSessionId));
-      this.gameLoopIntervals.delete(gameSessionId);
-      this.logger.log(`Game loop stopped for session ${gameSessionId}`);
+  async endGame(sessionId: string) {
+    await this.clearCountdownTimer(sessionId);
+    this.stopSimulationLoop(sessionId);
+
+    const session = await this.getSessionOrThrow(sessionId, ['host']);
+    const runtimeState = await this.ensureRuntimeState(session);
+
+    if (runtimeState.status === GameSessionStatus.FINISHED) {
+      const finalRankings = await this.getFinalRankings(sessionId);
+      return {
+        sessionId,
+        status: GameSessionStatus.FINISHED,
+        finalRankings,
+        podium: finalRankings.slice(0, 3),
+      };
     }
 
-    await this.redisService.hset(`game_state:${gameSessionId}`,
-      'status', GameSessionStatus.FINISHED,
-      'endTime', Date.now().toString()
+    const participants = await this.getParticipantsState(sessionId);
+    session.status = GameSessionStatus.FINISHED;
+    session.endTime = new Date();
+    await this.gameSessionRepository.save(session);
+
+    const sorted = [...participants].sort((left, right) => {
+      if (left.finalRank && right.finalRank) {
+        return left.finalRank - right.finalRank;
+      }
+      if (left.finalRank) {
+        return -1;
+      }
+      if (right.finalRank) {
+        return 1;
+      }
+      if (right.position !== left.position) {
+        return right.position - left.position;
+      }
+      return right.tapCount - left.tapCount;
+    });
+
+    let rollingRank = 1;
+    for (const participant of sorted) {
+      if (!participant.finalRank) {
+        participant.finalRank = rollingRank;
+      }
+      rollingRank += 1;
+      await this.saveParticipantState(sessionId, participant);
+
+      const participantRecord = await this.participantRepository.findOne({
+        where: { id: participant.participantId },
+      });
+
+      if (participantRecord) {
+        participantRecord.finalRank = participant.finalRank;
+        await this.participantRepository.save(participantRecord);
+      }
+    }
+
+    await this.persistRuntimeState(sessionId, {
+      status: GameSessionStatus.FINISHED,
+      countdownEndsAt: null,
+      finishedCount: sorted.filter((participant) => participant.isFinished).length,
+    });
+
+    const finalRankings = sorted.map((participant, index) =>
+      this.serializePublicRanking(participant, index + 1),
     );
 
-    const gameSession = await this.gameSessionRepository.findOne({ where: { id: gameSessionId } });
-    if (gameSession) {
-      gameSession.status = GameSessionStatus.FINISHED;
-      gameSession.endTime = new Date();
-      await this.gameSessionRepository.save(gameSession);
-    } else {
-      this.logger.error(`GameSession ${gameSessionId} not found in DB during endGame.`);
-    }
-
-
-    // Get final rankings from Redis Sorted Set
-    const rawRankings = await this.redisService.zrange(`game_ranking:${gameSessionId}`, 0, -1, 'WITHSCORES');
-    const finalRankings: any[] = [];
-    for (let i = 0; i < rawRankings.length; i += 2) {
-        const userId = rawRankings[i];
-        const finishTime = parseInt(rawRankings[i+1], 10); // score is finishTime
-        const participantData = JSON.parse(await this.redisService.hget(`game_participants:${gameSessionId}`, userId));
-
-        finalRankings.push({
-            userId,
-            wechatNickname: participantData.wechatNickname,
-            horseImageUrl: participantData.horseImageUrl,
-            finishTime,
-            rank: (i / 2) + 1,
-        });
-        // Update participant entity in PostgreSQL with final rank
-        await this.participantRepository.update(
-          { gameSession: { id: gameSessionId }, user: { id: userId } },
-          { finalRank: (i / 2) + 1 }
-        );
-    }
-
-    this.socketServer?.to(gameSessionId).emit('game_finished', {
-      sessionId: gameSessionId,
+    const payload = {
+      sessionId,
       status: GameSessionStatus.FINISHED,
-      finalRankings
-    });
-    this.logger.log(`Game session ${gameSessionId} finished. Rankings:`, finalRankings);
+      finalRankings,
+      podium: finalRankings.slice(0, 3),
+    };
+
+    this.socketServer?.to(sessionId).emit('game_finished', payload);
+    this.emitToDisplay('game_finished', payload);
+    await this.broadcastSessionState(sessionId);
+
+    return payload;
   }
 
-  // --- Utility methods ---
-  async getRealtimeRankings(gameSessionId: string, limit: number = 3) {
-    const rawRankings = await this.redisService.zrange(`game_ranking:${gameSessionId}`, 0, limit - 1, 'WITHSCORES');
-    const rankings = [];
-    for (let i = 0; i < rawRankings.length; i += 2) {
-        const userId = rawRankings[i];
-        const score = parseInt(rawRankings[i+1], 10);
-        const participantData = JSON.parse(await this.redisService.hget(`game_participants:${gameSessionId}`, userId));
-        rankings.push({
-            userId,
-            wechatNickname: participantData.wechatNickname,
-            rank: (i / 2) + 1,
-            score: score, // Could be finishTime or current position in a live game
-        });
+  async getFinalRankings(sessionId: string) {
+    const participants = await this.getParticipantsState(sessionId);
+
+    return participants
+      .sort((left, right) => {
+        if (left.finalRank && right.finalRank) {
+          return left.finalRank - right.finalRank;
+        }
+        return (left.finalRank || 999) - (right.finalRank || 999);
+      })
+      .map((participant, index) => this.serializePublicRanking(participant, index + 1));
+  }
+
+  async getRealtimeRankings(sessionId: string, limit = 5) {
+    const participants = await this.getParticipantsState(sessionId);
+
+    return participants
+      .sort((left, right) => {
+        if (left.isFinished && right.isFinished) {
+          return (left.finalRank || 999) - (right.finalRank || 999);
+        }
+        if (left.isFinished) {
+          return -1;
+        }
+        if (right.isFinished) {
+          return 1;
+        }
+        if (right.position !== left.position) {
+          return right.position - left.position;
+        }
+        return right.tapCount - left.tapCount;
+      })
+      .slice(0, limit)
+      .map((participant, index) => this.serializePublicRanking(participant, index + 1));
+  }
+
+  async getParticipantState(sessionId: string, userId: string) {
+    const participant = await this.redis.hget(this.getParticipantRedisKey(sessionId), userId);
+
+    if (!participant) {
+      throw new NotFoundException(`Participant ${userId} not found in session ${sessionId}`);
     }
 
-    // If game is playing, sort by current position (higher position = better rank)
-    const gameState = await this.redisService.hgetall(`game_state:${gameSessionId}`);
-    if (gameState.status === GameSessionStatus.PLAYING) {
-        const allParticipantsData = await this.redisService.hgetall(`game_participants:${gameSessionId}`);
-        const allParticipants = Object.entries(allParticipantsData).map(([userId, data]) => ({ userId, ...JSON.parse(data) }));
-        allParticipants.sort((a, b) => b.position - a.position); // Descending order of position
-        return allParticipants.slice(0, limit).map((p, index) => ({
-            userId: p.userId,
-            wechatNickname: p.wechatNickname,
-            rank: index + 1,
-            position: p.position,
-        }));
-    }
-
-    return rankings;
+    return this.serializeParticipantState(JSON.parse(participant) as ParticipantState);
   }
-
-  async getParticipantState(gameSessionId: string, userId: string) {
-    const participantData = await this.redisService.hget(`game_participants:${gameSessionId}`, userId);
-    if (!participantData) {
-      throw new NotFoundException(`Participant ${userId} not found in session ${gameSessionId}`);
-    }
-    return JSON.parse(participantData);
-  }
-
-  // Helper to find a specific user's socket ID in a session (if needed for direct messaging)
-  private getUserSocketId(userId: string, sessionId: string): string {
-    // This is a simplified approach. In a real app, you'd store userId -> socketId mapping in Redis
-    // and fetch all sockets in the room for a user.
-    // For now, this assumes one socket per user per session.
-    // This would ideally be managed by the GameGateway and stored in Redis.
-    return `${userId}-${sessionId}`; // Placeholder, needs actual implementation in Gateway
-  }
-
 
   onModuleDestroy() {
-    this.gameLoopIntervals.forEach(interval => clearInterval(interval));
-    this.gameLoopIntervals.clear();
-    this.logger.log('GameService destroyed, all game loops cleared.');
+    this.countdownTimeouts.forEach((timeout) => clearTimeout(timeout));
+    this.countdownTimeouts.clear();
+
+    this.simulationIntervals.forEach((interval) => clearInterval(interval));
+    this.simulationIntervals.clear();
+    this.simulationLocks.clear();
   }
 }

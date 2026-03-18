@@ -8,32 +8,23 @@ import { validationSchema } from './config/validation-schema';
 import { getTypeOrmConfig } from './database/typeorm.config';
 import { AuthModule } from './auth/auth.module';
 import { GameModule } from './game/game.module';
-import { RedisModule } from '@nestjs-modules/ioredis';
-import { WallModule } from './wall/wall.module'; // Import WallModule
+import { WallModule } from './wall/wall.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       load: [configuration],
       validationSchema,
-      isGlobal: true, // Makes ConfigService available everywhere
+      isGlobal: true,
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => getTypeOrmConfig(configService),
       inject: [ConfigService],
     }),
-    RedisModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        type: 'single', // Or 'cluster' for Redis cluster
-        url: `redis://${configService.get<string>('redis.host')}:${configService.get<number>('redis.port')}`,
-      }),
-      inject: [ConfigService],
-    }),
     AuthModule,
     GameModule,
-    WallModule, // Add WallModule here
+    WallModule,
   ],
   controllers: [AppController],
   providers: [AppService],

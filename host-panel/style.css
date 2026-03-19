@@ -232,8 +232,7 @@ a {
 }
 
 .composer-panel { grid-column: span 3; }
-.live-panel { grid-column: span 5; }
-.qr-panel { grid-column: span 4; }
+.live-panel { grid-column: span 9; }
 .roster-panel { grid-column: span 4; }
 .moderation-panel { grid-column: span 4; }
 .approved-panel { grid-column: span 4; }
@@ -368,41 +367,6 @@ a {
 
 #wall-opacity-slider {
     width: 100%;
-}
-
-.qr-wrap {
-    display: grid;
-    place-items: center;
-    padding: 18px;
-    background: rgba(255, 255, 255, 0.96);
-    border-radius: 24px;
-    min-height: 280px;
-}
-
-.qr-wrap img {
-    width: min(100%, 260px);
-    aspect-ratio: 1;
-    object-fit: contain;
-}
-
-.link-block {
-    display: grid;
-    gap: 8px;
-    margin-top: 14px;
-}
-
-.link-block span {
-    color: var(--muted);
-    font-size: 12px;
-}
-
-.link-block code {
-    display: block;
-    overflow-wrap: anywhere;
-    padding: 12px 14px;
-    border-radius: 16px;
-    background: rgba(0, 0, 0, 0.18);
-    color: #dbeafe;
 }
 
 .participant-list,
@@ -557,7 +521,6 @@ a {
 @media (max-width: 1400px) {
     .composer-panel,
     .live-panel,
-    .qr-panel,
     .roster-panel,
     .moderation-panel,
     .approved-panel {
@@ -576,7 +539,6 @@ a {
 
     .composer-panel,
     .live-panel,
-    .qr-panel,
     .roster-panel,
     .moderation-panel,
     .approved-panel,

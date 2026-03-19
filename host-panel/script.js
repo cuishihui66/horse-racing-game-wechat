@@ -41,9 +41,6 @@
     autoBotSimToggle: document.getElementById('auto-bot-sim-toggle'),
     startBotSimBtn: document.getElementById('start-bot-sim-btn'),
     stopBotSimBtn: document.getElementById('stop-bot-sim-btn'),
-    qrCodeImg: document.getElementById('qr-code-img'),
-    joinUrlText: document.getElementById('join-url-text'),
-    wallUrlText: document.getElementById('wall-url-text'),
     participantList: document.getElementById('participant-list'),
     pendingMessagesList: document.getElementById('pending-messages-list'),
     approvedMessagesList: document.getElementById('approved-messages-list'),
@@ -54,6 +51,15 @@
 
   function getApiUrl(path) {
     return `${CONFIG.API_BASE_URL}${path}`;
+  }
+
+  function escapeHtml(value) {
+    return `${value || ''}`
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   function showLoginStatus(message, isError = false) {
@@ -67,10 +73,7 @@
   }
 
   async function apiRequest(path, method = 'GET', body) {
-    const headers = {
-      'Content-Type': 'application/json',
-    };
-
+    const headers = { 'Content-Type': 'application/json' };
     if (state.authToken) {
       headers.Authorization = `Bearer ${state.authToken}`;
     }
@@ -98,12 +101,13 @@
   function translateStatus(status) {
     const mapping = {
       waiting: '待命',
-      qr_scanning: '扫码报名',
+      qr_scanning: '报名中',
       ready_to_start: '准备就绪',
       countdown: '倒计时',
       playing: '比赛进行中',
-      finished: '本场结束',
+      finished: '已结束',
     };
+
     return mapping[status] || '未知状态';
   }
 
@@ -115,34 +119,29 @@
     return 'is-idle';
   }
 
-  function escapeHtml(value) {
-    return `${value || ''}`
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
   function upsertSession(sessionSummary) {
     const next = [...state.sessions];
     const index = next.findIndex((item) => item.id === sessionSummary.id);
+
     if (index >= 0) {
       next[index] = { ...next[index], ...sessionSummary };
     } else {
       next.unshift(sessionSummary);
     }
+
     state.sessions = next.sort((left, right) => new Date(right.updatedAt) - new Date(left.updatedAt));
   }
 
   function upsertMessage(list, message) {
     const next = [...list];
     const index = next.findIndex((item) => item.id === message.id);
+
     if (index >= 0) {
       next[index] = { ...next[index], ...message };
     } else {
       next.unshift(message);
     }
+
     return next;
   }
 
@@ -180,7 +179,7 @@
               </div>
               <span class="status-pill ${statusClass(session.status)}">${translateStatus(session.status)}</span>
             </div>
-            <div class="podium-row">${podiumHtml || '<span class="history-meta">本场尚未产生领奖台</span>'}</div>
+            <div class="podium-row">${podiumHtml || '<span class="history-meta">本场尚未产生领奖名单</span>'}</div>
             <button class="ghost-button manage-session-btn" data-session-id="${session.id}" type="button">切换到本场</button>
           </article>
         `;
@@ -198,20 +197,22 @@
 
   function renderParticipants() {
     const participants = state.currentSession?.participants || [];
+
     if (!participants.length) {
       refs.participantList.className = 'participant-list empty-state';
-      refs.participantList.textContent = '等待扫码加入';
+      refs.participantList.textContent = '等待用户加入';
       return;
     }
 
     refs.participantList.className = 'participant-list';
     refs.participantList.innerHTML = participants
       .slice()
-      .sort((left, right) => left.laneNumber - right.laneNumber)
+      .sort((left, right) => (left.laneNumber || 0) - (right.laneNumber || 0))
       .map((participant) => {
         const detail = participant.finalRank
           ? `第 ${participant.finalRank} 名`
-          : `点击 ${participant.tapCount} 次 · ${participant.progressPercent}%`;
+          : `点击 ${participant.tapCount} 次 · ${Math.round(participant.progressPercent || 0)}%`;
+
         return `
           <div class="participant-card">
             <img class="avatar" src="${escapeHtml(participant.avatarUrl || 'https://via.placeholder.com/96?text=U')}" alt="">
@@ -219,7 +220,7 @@
               <div class="participant-name">${escapeHtml(participant.wechatNickname)}</div>
               <div class="participant-meta">赛道 ${participant.laneNumber} · ${detail}</div>
             </div>
-            <span class="horse-chip" style="background:${escapeHtml(participant.horseColor)}"></span>
+            <span class="horse-chip" style="background:${escapeHtml(participant.horseColor || '#9ab0cf')}"></span>
           </div>
         `;
       })
@@ -230,6 +231,7 @@
     const isPending = mode === 'pending';
     const isTop = Boolean(message.isTop);
     const timeText = message.createdAt ? new Date(message.createdAt).toLocaleTimeString() : '--';
+
     return `
       <article class="message-card ${isTop ? 'is-top' : ''}">
         <div class="message-head">
@@ -321,6 +323,7 @@
 
   function renderSessionSummary() {
     const session = state.currentSession;
+
     if (!session) {
       refs.currentSessionTitle.textContent = '当前没有激活场次';
       refs.currentSessionId.textContent = '-';
@@ -328,13 +331,11 @@
       refs.currentStatusPill.className = 'status-pill is-idle';
       refs.participantCount.textContent = '0';
       refs.finishProgress.textContent = '0 / 0';
-      refs.qrCodeImg.src = '';
-      refs.joinUrlText.textContent = '-';
-      refs.wallUrlText.textContent = '-';
       refs.displayLink.href = DISPLAY_BASE_URL;
       refs.generateFakeUsersBtn.disabled = true;
       refs.startBotSimBtn.disabled = true;
       refs.stopBotSimBtn.disabled = true;
+      refs.reopenJoinBtn.disabled = true;
       return;
     }
 
@@ -344,9 +345,6 @@
     refs.currentStatusPill.className = `status-pill ${statusClass(session.status)}`;
     refs.participantCount.textContent = String(session.participantCount || 0);
     refs.finishProgress.textContent = `${session.finishedCount || 0} / ${session.finishLimit || 0}`;
-    refs.qrCodeImg.src = session.qrCodeImageUrl || '';
-    refs.joinUrlText.textContent = session.qrCodeUrl || '-';
-    refs.wallUrlText.textContent = session.wallQrCodeUrl || '-';
     refs.wallOpacitySlider.value = String(Math.round((session.wallOpacity || 0.72) * 100));
     refs.wallOpacityValue.textContent = `${Math.round((session.wallOpacity || 0.72) * 100)}%`;
     refs.displayLink.href = `${DISPLAY_BASE_URL}?sessionId=${encodeURIComponent(session.id)}`;
@@ -356,7 +354,8 @@
     refs.resetGameBtn.disabled = !['ready_to_start', 'countdown', 'playing', 'finished', 'qr_scanning'].includes(session.status);
     refs.reopenJoinBtn.disabled = !state.currentSessionId;
     refs.generateFakeUsersBtn.disabled = session.status !== 'qr_scanning';
-    refs.startBotSimBtn.disabled = !['ready_to_start', 'countdown', 'playing'].includes(session.status) || session.simulationActive;
+    refs.startBotSimBtn.disabled =
+      !['ready_to_start', 'countdown', 'playing'].includes(session.status) || session.simulationActive;
     refs.stopBotSimBtn.disabled = !session.simulationActive;
   }
 
@@ -377,20 +376,18 @@
     const session = await apiRequest(`/game/${sessionId}/state`);
     state.currentSession = session;
     state.currentSessionId = session.id;
+
     upsertSession({
       id: session.id,
       title: session.title,
       status: session.status,
       participantCount: session.participantCount,
-      qrCodeUrl: session.qrCodeUrl,
-      wallQrCodeUrl: session.wallQrCodeUrl,
-      qrCodeImageUrl: session.qrCodeImageUrl,
-      wallQrCodeImageUrl: session.wallQrCodeImageUrl,
       wallOpacity: session.wallOpacity,
       createdAt: session.createdAt,
       updatedAt: session.updatedAt,
       podium: (session.finalRankings || []).slice(0, 3),
     });
+
     renderAll();
     return session;
   }
@@ -465,6 +462,7 @@
         currentRankings: payload.currentTopRankings || [],
         finishedCount: payload.finishedCount,
       };
+
       renderSessionSummary();
       renderParticipants();
     });
@@ -480,6 +478,7 @@
         participants: nextParticipants,
         participantCount: nextParticipants.length,
       };
+
       renderSessionSummary();
       renderParticipants();
     });
@@ -494,6 +493,7 @@
         status: 'finished',
         finalRankings: payload.finalRankings || [],
       };
+
       renderAll();
       fetchSessions().catch(() => {});
     });
@@ -611,7 +611,7 @@
       });
 
       refs.gameTitleInput.value = '';
-      showCreateFeedback('场次已创建，大屏已进入扫码阶段。');
+      showCreateFeedback('场次已创建，大屏已进入报名展示阶段。');
       await fetchSessions();
       await manageSession(created.id || created.gameSessionId);
     } catch (error) {
@@ -634,6 +634,7 @@
   async function startRace() {
     if (!state.currentSessionId) return;
     await apiRequest(`/game/${state.currentSessionId}/start`, 'POST');
+
     if (refs.autoBotSimToggle.checked) {
       await apiRequest(`/game/${state.currentSessionId}/dev/simulation/start`, 'POST');
       await fetchSessionState(state.currentSessionId);
@@ -690,11 +691,13 @@
   refs.loginBtn.addEventListener('click', () => {
     login().catch((error) => showLoginStatus(error.message || '登录失败', true));
   });
+
   refs.passwordInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
       login().catch((error) => showLoginStatus(error.message || '登录失败', true));
     }
   });
+
   refs.logoutBtn.addEventListener('click', logout);
   refs.createSessionBtn.addEventListener('click', () => {
     createSession().catch((error) => showCreateFeedback(error.message || '创建失败', true));

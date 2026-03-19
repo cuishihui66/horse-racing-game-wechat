@@ -49,8 +49,8 @@
                     <span>游戏主题</span>
                     <input id="game-title-input" type="text" maxlength="40" placeholder="例如：年度冲刺赛">
                 </label>
-                <button id="create-session-btn" class="primary-button" type="button">新建游戏并开放扫码</button>
-                <p id="create-feedback" class="subtle-note">创建后，大屏会直接进入扫码报名阶段。</p>
+                <button id="create-session-btn" class="primary-button" type="button">新建游戏</button>
+                <p id="create-feedback" class="subtle-note">创建后，大屏会进入报名展示阶段，主持人界面不显示扫码入口。</p>
             </section>
 
             <section class="panel live-panel">
@@ -76,7 +76,7 @@
                     </div>
                 </div>
                 <div class="control-actions">
-                    <button id="reopen-join-btn" class="secondary-button" type="button">重新开放扫码</button>
+                    <button id="reopen-join-btn" class="secondary-button" type="button">重新开放报名</button>
                     <button id="prepare-game-btn" class="secondary-button" type="button">准备游戏</button>
                     <button id="start-race-btn" class="primary-button" type="button">开始比赛</button>
                     <button id="reset-game-btn" class="danger-button" type="button">重置本场</button>
@@ -111,26 +111,6 @@
                 </div>
             </section>
 
-            <section class="panel qr-panel">
-                <div class="panel-header">
-                    <div>
-                        <p class="panel-eyebrow">ENTRY</p>
-                        <h2>扫码入口</h2>
-                    </div>
-                </div>
-                <div class="qr-wrap">
-                    <img id="qr-code-img" src="" alt="游戏二维码">
-                </div>
-                <div class="link-block">
-                    <span>参与链接</span>
-                    <code id="join-url-text">-</code>
-                </div>
-                <div class="link-block">
-                    <span>留言链接</span>
-                    <code id="wall-url-text">-</code>
-                </div>
-            </section>
-
             <section class="panel roster-panel">
                 <div class="panel-header">
                     <div>
@@ -138,7 +118,7 @@
                         <h2>参赛用户</h2>
                     </div>
                 </div>
-                <div id="participant-list" class="participant-list empty-state">等待扫码加入</div>
+                <div id="participant-list" class="participant-list empty-state">等待用户加入</div>
             </section>
 
             <section class="panel moderation-panel">

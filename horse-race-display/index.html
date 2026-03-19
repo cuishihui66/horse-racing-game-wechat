@@ -7,79 +7,82 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div id="screen-shell" class="screen-shell status-waiting">
-        <div class="ambient ambient-left"></div>
-        <div class="ambient ambient-right"></div>
+    <div id="screen-shell" class="screen-shell" data-stage="idle">
         <div id="barrage-layer" class="barrage-layer"></div>
 
-        <header class="hero-bar">
-            <div>
-                <p class="kicker">HORSE RACING LIVE</p>
-                <h1 id="session-title">等待主持人创建游戏</h1>
-                <div class="hero-meta">
-                    <span id="status-pill" class="status-pill is-waiting">待命</span>
-                    <span id="participant-pill" class="hero-chip">0 位骑手</span>
-                    <span id="tap-pill" class="hero-chip">0 次冲刺</span>
+        <section id="join-stage" class="stage join-stage">
+            <div class="join-backdrop"></div>
+            <div class="join-panel">
+                <p class="eyebrow">HORSE RACE LIVE</p>
+                <h1 id="join-title" class="join-title">等待主持人创建游戏</h1>
+                <p class="join-description">主持人创建游戏后，大屏会显示专属二维码。参与者扫码进入小程序，即可加入本场互动赛马。</p>
+                <div class="join-meta">
+                    <span id="join-status-pill" class="status-pill">待命</span>
+                    <span id="join-count-pill" class="meta-pill">0 人已加入</span>
                 </div>
             </div>
-            <div class="hero-stats">
-                <div class="stat-card">
-                    <span class="stat-label">冲线目标</span>
-                    <strong id="finish-limit">TOP 5</strong>
+            <div class="join-qr-shell">
+                <div class="qr-frame">
+                    <img id="join-qr-image" src="" alt="参与二维码">
                 </div>
-                <div class="stat-card">
-                    <span class="stat-label">已到终点</span>
-                    <strong id="finished-count">0</strong>
-                </div>
-            </div>
-        </header>
-
-        <section id="join-stage" class="join-stage">
-            <div class="join-copy">
-                <p class="join-kicker">扫码报名，立刻上马</p>
-                <h2 id="join-stage-title">新一轮互动赛即将开始</h2>
-                <p class="join-description">扫码进入小程序后即可报名、留言，并在倒计时结束后为自己的小马疯狂冲刺。</p>
-                <div id="join-roster" class="join-roster"></div>
-            </div>
-            <div class="join-card">
-                <div class="qr-card">
-                    <img id="qr-code-image" src="" alt="参与二维码">
-                </div>
-                <p class="join-tip">请使用微信扫码参与</p>
+                <p class="qr-caption">微信扫码参与游戏</p>
             </div>
         </section>
 
-        <main class="race-layout">
-            <section class="track-panel">
-                <div class="track-head">
-                    <span>起跑线</span>
-                    <span>终点线</span>
+        <section id="race-stage" class="stage race-stage">
+            <div class="race-backdrop"></div>
+            <header class="race-header">
+                <div>
+                    <p class="eyebrow">RACE IN PROGRESS</p>
+                    <h1 id="race-title" class="race-title">赛马摇一摇</h1>
+                </div>
+                <div class="race-metrics">
+                    <div class="metric-pill">
+                        <span class="metric-label">参赛人数</span>
+                        <strong id="race-participant-count">0</strong>
+                    </div>
+                    <div class="metric-pill">
+                        <span class="metric-label">已冲线</span>
+                        <strong id="race-finished-count">0</strong>
+                    </div>
+                    <div class="metric-pill">
+                        <span class="metric-label">目标</span>
+                        <strong id="race-finish-limit">TOP 5</strong>
+                    </div>
+                </div>
+            </header>
+
+            <div class="track-shell">
+                <div class="track-markers">
+                    <span>START</span>
+                    <span>FINISH</span>
                 </div>
                 <div id="track-lanes" class="track-lanes"></div>
-            </section>
+            </div>
+        </section>
 
-            <aside class="ranking-panel">
-                <div class="panel-title-row">
-                    <p class="panel-kicker">LIVE BOARD</p>
-                    <h2>实时前五</h2>
+        <section id="result-stage" class="stage result-stage">
+            <div class="result-backdrop"></div>
+            <div class="result-card">
+                <p class="eyebrow">RACE RESULT</p>
+                <h1 id="result-title" class="result-title">冠军诞生</h1>
+                <p class="result-subtitle">本场比赛前三名与前五榜单</p>
+
+                <div id="podium-list" class="podium-list"></div>
+
+                <div class="final-board">
+                    <div class="final-board-head">
+                        <h2>前五排名</h2>
+                    </div>
+                    <div id="final-ranking-list" class="final-ranking-list"></div>
                 </div>
-                <div id="ranking-list" class="ranking-list"></div>
-            </aside>
-        </main>
+            </div>
+        </section>
 
         <div id="countdown-overlay" class="countdown-overlay hidden">
             <div class="countdown-card">
                 <p>比赛即将开始</p>
                 <span id="countdown-number">3</span>
-            </div>
-        </div>
-
-        <div id="finish-overlay" class="finish-overlay hidden">
-            <div class="finish-card">
-                <p class="panel-kicker">RACE RESULT</p>
-                <h2>冠军榜单</h2>
-                <div id="podium-list" class="podium-list"></div>
-                <div id="final-ranking-list" class="final-ranking-list"></div>
             </div>
         </div>
     </div>
